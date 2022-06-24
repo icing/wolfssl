@@ -74,6 +74,9 @@
 #ifdef HAVE_OCSP
     #include <wolfssl/ocsp.h>
 #endif
+#ifdef WOLFSSL_QUIC
+    #include <wolfssl/quic.h>
+#endif
 #ifdef WOLFSSL_SHA384
     #include <wolfssl/wolfcrypt/sha512.h>
 #endif
@@ -1964,7 +1967,7 @@ WOLFSSL_LOCAL int  SetSuitesHashSigAlgo(Suites* suites, const char* list);
 #if defined(WOLFSSL_DTLS) && defined(WOLFSSL_SESSION_EXPORT) && \
    !defined(WOLFSSL_DTLS_EXPORT_TYPES)
     typedef int (*wc_dtls_export)(WOLFSSL* ssl,
-                   unsigned char* exportBuffer, unsigned int sz, void* userCtx);
+
 #define WOLFSSL_DTLS_EXPORT_TYPES
 #endif /* WOLFSSL_DTLS_EXPORT_TYPES */
 
@@ -3150,6 +3153,11 @@ struct WOLFSSL_CTX {
     #ifndef SINGLE_THREADED
     wolfSSL_Mutex staticKELock;
     #endif
+#endif
+#ifdef WOLFSSL_QUIC
+    struct {
+        const WOLFSSL_QUIC_METHOD *method;
+    } quic;
 #endif
 };
 
@@ -4848,6 +4856,24 @@ struct WOLFSSL {
 #ifdef WOLFSSL_LWIP_NATIVE
     WOLFSSL_LWIP_NATIVE_STATE      lwipCtx; /* LwIP native socket IO Context */
 #endif
+#ifdef WOLFSSL_QUIC
+    struct {
+        const WOLFSSL_QUIC_METHOD *method;
+        WOLFSSL_ENCRYPTION_LEVEL enc_level_read;
+        WOLFSSL_ENCRYPTION_LEVEL enc_level_write;
+        WOLFSSL_ENCRYPTION_LEVEL enc_level_latest_recvd;
+        int transport_version;
+        struct {
+            uint8_t *our;
+            size_t our_len;
+            uint8_t *peer_draft;
+            size_t peer_draft_len;
+            uint8_t *peer;
+            size_t peer_len;
+        } transport_params;
+        WOLFSSL_BUF_MEM *buf;
+    } quic;
+#endif
 };
 
 /*
@@ -5475,6 +5501,12 @@ WOLFSSL_LOCAL int EncryptDerKey(byte *der, int *derSz, const EVP_CIPHER* cipher,
 #if defined(WOLFSSL_KEY_GEN) && !defined(NO_RSA) && !defined(HAVE_USER_RSA)
 WOLFSSL_LOCAL int wolfSSL_RSA_To_Der(WOLFSSL_RSA* rsa, byte** outBuf,
     int publicKey, void* heap);
+#endif
+
+#ifdef WOLFSSL_QUIC
+#define WOLFSSL_IS_QUIC(s)  (s->quic.method != NULL)
+#else
+#define WOLFSSL_IS_QUIC(s) 0
 #endif
 
 #ifdef __cplusplus
