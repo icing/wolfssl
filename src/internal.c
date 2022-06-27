@@ -7492,6 +7492,9 @@ void SSL_ResourceFree(WOLFSSL* ssl)
 #ifdef WOLFSSL_DTLS13
     Dtls13FreeFsmResources(ssl);
 #endif /* WOLFSSL_DTLS13 */
+#ifdef WOLFSSL_QUIC
+    QuicFreeResources(ssl);
+#endif
 }
 
 /* Free any handshake resources no longer needed */

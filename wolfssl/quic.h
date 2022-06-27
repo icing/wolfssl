@@ -28,7 +28,12 @@
 
 #ifdef WOLFSSL_QUIC
 
-
+/* QUIC operates on three encryption levels which determine
+ * which keys/algos are used for de-/encryption. These are
+ * kept separately for incoming and outgoing data and.
+ * Due to the nature of UDP, more than one might be in use
+ * at the same time due to resends or out-of-order arrivals.
+ */
 typedef enum wolfssl_encryption_level_t {
     wolfssl_encryption_initial = 0,
     wolfssl_encryption_early_data,
@@ -37,6 +42,8 @@ typedef enum wolfssl_encryption_level_t {
 } WOLFSSL_ENCRYPTION_LEVEL;
 
 
+/* All QUIC related callbacks to the application.
+ */
 typedef struct wolfssl_quic_method_t WOLFSSL_QUIC_METHOD;
 
 struct wolfssl_quic_method_t {
@@ -82,6 +89,16 @@ enum {
 WOLFSSL_API void wolfSSL_set_quic_use_legacy_codepoint(WOLFSSL *ssl, int use_legacy);
 WOLFSSL_API void wolfSSL_set_quic_transport_version(WOLFSSL *ssl, int version);
 WOLFSSL_API int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl);
+
+
+WOLFSSL_API int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
+                                          const uint8_t *data, size_t len);
+
+WOLFSSL_API int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl);
+
+#ifdef WOLFSSL_EARLY_DATA
+WOLFSSL_API void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled);
+#endif
 
 #endif /* WOLFSSL_QUIC */
 #endif /* WOLFSSL_QUIC_H */

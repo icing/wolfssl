@@ -27,6 +27,12 @@
 #endif
 
 #include <wolfssl/wolfcrypt/settings.h>
+#ifdef NO_INLINE
+    #include <wolfssl/wolfcrypt/misc.h>
+#else
+    #define WOLFSSL_MISC_INCLUDED
+    #include <wolfcrypt/src/misc.c>
+#endif
 
 #ifndef WOLFCRYPT_ONLY
 #ifdef WOLFSSL_QUIC
@@ -34,6 +40,143 @@
 #include <wolfssl/error-ssl.h>
 #include <wolfssl/ssl.h>
 #include <wolfssl/internal.h>
+
+#include <wolfssl/openssl/buffer.h>
+
+typedef struct QuicRecord {
+    struct QuicRecord *next;
+    uint8_t *data;
+    word32 capacity;
+    word32 len;
+    word32 idx;
+    WOLFSSL_ENCRYPTION_LEVEL level;
+} QuicEncData;
+
+static int qr_length(const uint8_t *data, size_t len)
+{
+    word32 rlen;
+    if (len < 4) {
+        return 0;
+    }
+    c24to32(&data[1], &rlen);
+    return (int)rlen + 4;
+}
+
+static void quic_record_free(WOLFSSL *ssl, QuicRecord *r)
+{
+    (void)ssl;
+    if (r->data) {
+        XFREE(r->data, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
+    }
+    XFREE(r, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
+}
+
+
+static QuicRecord *quic_record_make(WOLFSSL *ssl, const uint8_t *data, size_t len)
+{
+    QuicRecord *qr;
+
+    qr = XMALLOC(sizeof(*qr), ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
+    if (qr) {
+        memset(qr, 0, sizeof(*qr));
+        qr->capacity = qr->len = qr_length(data, len);
+        if (qr->capacity == 0) {
+            qr->capacity = 2*1024;
+        }
+        qr->data = XMALLOC(qr->capacity, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
+        if (!qr->data) {
+            quic_record_free(ssl, qr);
+            return NULL;
+        }
+    }
+    return qr;
+}
+
+static int quic_record_complete(QuicRecord *r)
+{
+    return r->len && r->idx >= r->len;
+}
+
+static int quic_record_append(WOLFSSL *ssl, QuicRecord *qr, const uint8_t *data,
+                              size_t len, size_t *pconsumed)
+{
+    size_t missing, consumed = 0;
+    int ret = WOLFSSL_SUCCESS;
+
+    (void)ssl;
+    if (!qr->len && len) {
+        missing = 4 - qr->idx;
+        if (len < missing) {
+            XMEMCPY(qr->data + qr->idx, data, len);
+            qr->idx += len;
+            consumed = len;
+            goto cleanup; /* len consumed, but qr->len still unkown */
+        }
+        XMEMCPY(qr->data + qr->idx, data, missing);
+        qr->idx += missing;
+        len -= missing;
+        data += missing;
+        consumed = missing;
+
+        qr->len = qr_length(qr->data, qr->idx);
+        if (qr->len > qr->capacity) {
+            uint8_t *ndata = XREALLOC(qr->data, qr->len, ssl->head, DYNAMIC_TYPE_TMP_BUFFER);
+            if (!ndata) {
+                ret = WOLFSSL_FAILURE;
+                goto cleanup;
+            }
+            qr->data = ndata;
+            qr->capacity = qr->len;
+        }
+    }
+
+    if (quic_record_complete(qr) || len == 0) {
+        return 0;
+    }
+
+    missing = qr->len - qr->idx;
+    if (len > missing) {
+        len = missing;
+    }
+    XMEMCPY(qr->data + qr->idx, data, len);
+    qr->idx += len;
+    consumed += len;
+
+cleanup:
+    *pconsumed = (ret == WOLFSSL_SUCCESS)? consumed : 0;
+    return ret;
+}
+
+
+void QuicFreeResources(WOLFSSL* ssl)
+{
+    QuicEncData *qd;
+
+    if (ssl->quic.transport_params.our) {
+        XFREE(ssl->quic.transport_params.our, ssl->heap, DYNAMIC_TYPE_SSL);
+        ssl->quic.transport_params.our = NULL;
+    }
+    if (ssl->quic.transport_params.peer) {
+        XFREE(ssl->quic.transport_params.peer, ssl->heap, DYNAMIC_TYPE_SSL);
+        ssl->quic.transport_params.peer = NULL;
+    }
+    if (ssl->quic.transport_params.peer_draft) {
+        XFREE(ssl->quic.transport_params.peer_draft, ssl->heap, DYNAMIC_TYPE_SSL);
+        ssl->quic.transport_params.peer_draft = NULL;
+    }
+
+    while ((qd = ssl->quic.input_head)) {
+        ssl->quic.input_head = qd->next;
+        quic_record_free(ssl, qd);
+    }
+    ssl->quic.input_tail = NULL;
+
+    if (ssl->quic.scratch) {
+        quic_record_free(ssl, ssl->quic.scratch);
+        ssl->quic.scratch = NULL;
+    }
+    ssl->quic.method = NULL;
+}
 
 
 static int ctx_check_quic_compat(const WOLFSSL_CTX *ctx)
@@ -189,6 +332,25 @@ int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl)
 }
 
 
+#ifdef WOLFSSL_EARLY_DATA
+void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled)
+{
+    /* This only has effect on server and when the handshake has
+     * not started yet. For clients, we have no internal options
+     * state that would make wolfSSL_write_early_data() fail inspite
+     * the server supporting it.
+     * So we silently ignore all these cases. The use case for this
+     * function seems to be designed for servers.
+     */
+    if (wolfSSL_is_quic(ssl)
+        && ssl->options.handShakeState == NULL_STATE
+        && ssl->options.side == WOLFSSL_SERVER_END) {
+        ssl->options.maxEarlyDataSz = enabled? MAX_EARLY_DATA_SZ : 0;
+    }
+}
+#endif /* WOLFSSL_EARLY_DATA */
+
+
 int wolfSSL_CIPHER_get_prf_nid(const WOLFSSL_CIPHER *c)
 {
     /* TODO: extract the NID of the pseudo random function (PRF)
@@ -198,7 +360,97 @@ int wolfSSL_CIPHER_get_prf_nid(const WOLFSSL_CIPHER *c)
      * cipher id.
      */
      (void)c;
-     return 0;
+     return WOLFSSL_FAILURE;
+}
+
+
+int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl)
+{
+    int ret = WOLFSSL_SUCCESS;
+
+    WOLFSSL_ENTER("wolfSSL_process_quic_post_handshake");
+
+    if (!wolfSSL_is_quic(ssl)) {
+        WOLFSSL_MSG("WOLFSSL_QUIC_POST_HS not a QUIC SSL");
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    if (ssl->options.handShakeState == NULL_STATE) {
+        WOLFSSL_MSG("WOLFSSL_QUIC_POST_HS handshake not started");
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    while (ssl->quic.input_head != NULL) {
+        /* TODO: process and consume the data for handshake */
+    }
+
+cleanup:
+    WOLFSSL_LEAVE("wolfSSL_process_quic_post_handshake", ret);
+    return ret;
+}
+
+
+int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
+                              const uint8_t *data, size_t len)
+{
+    int ret = WOLFSSL_SUCCESS;
+    size_t l;
+
+    WOLFSSL_ENTER("wolfSSL_provide_quic_data");
+    if (!wolfSSL_is_quic(ssl)) {
+        WOLFSSL_MSG("WOLFSSL_QUIC_PROVIDE_DATA not a QUIC SSL");
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    if (level < ssl->quic.enc_level_read
+        || (ssl->quic.input_tail && level < ssl->quic.input_tail->level)
+        || level < ssl->quic.enc_level_latest_recvd) {
+        WOLFSSL_MSG("WOLFSSL_QUIC_PROVIDE_DATA wrong encryption level");
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    while (len > 0) {
+        if (ssl->quic.scratch) {
+            if (ssl->quic.scratch->level != level) {
+                WOLFSSL_MSG("WOLFSSL_QUIC_PROVIDE_DATA wrong encryption level");
+                ret = WOLFSSL_FAILURE;
+                goto cleanup;
+            }
+
+            ret = quic_record_append(ssl, ssl->quic.scratch, data, len, &l);
+            if (ret != WOLFSSL_SUCCESS) {
+                goto cleanup;
+            }
+            data += l;
+            len -= l;
+            if (quic_record_complete(ssl->quic.scratch)) {
+                if (ssl->quic.input_tail) {
+                    ssl->quic.input_tail->next = ssl->quic.scratch;
+                    ssl->quic.input_tail = ssl->quic.scratch;
+                }
+                else {
+                    ssl->quic.input_head = ssl->quic.input_tail = ssl->quic.scratch;
+                }
+                ssl->quic.scratch = NULL;
+            }
+        }
+        else {
+            /* start of next record with all bytes for the header */
+            ssl->quic.scratch = quic_record_make(ssl, data, len);
+            if (!ssl->quic.scratch) {
+                ret = WOLFSSL_FAILURE;
+                goto cleanup;
+            }
+        }
+    }
+
+cleanup:
+    WOLFSSL_LEAVE("wolfSSL_provide_quic_data", ret);
+    return ret;
 }
 
 

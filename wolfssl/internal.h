@@ -3422,6 +3422,10 @@ typedef enum WOLFSSL_SESSION_TYPE {
     WOLFSSL_SESSION_TYPE_HEAP    /* allocated from heap SESSION_new */
 } WOLFSSL_SESSION_TYPE;
 
+#ifdef WOLFSSL_QUIC
+typedef struct QuicRecord QuicRecord;
+#endif /* WOLFSSL_QUIC */
+
 /* wolfSSL session type */
 struct WOLFSSL_SESSION {
     /* WARNING Do not add fields here. They will be ignored in
@@ -4871,9 +4875,11 @@ struct WOLFSSL {
             uint8_t *peer;
             size_t peer_len;
         } transport_params;
-        WOLFSSL_BUF_MEM *buf;
+        QuicRecord *input_head;          /* we own, data for handshake */
+        QuicRecord *input_tail;          /* points to last element for append */
+        QuicRecord *scratch;             /* we own, record construction */
     } quic;
-#endif
+#endif /* WOLFSSL_QUIC */
 };
 
 /*
@@ -5505,9 +5511,10 @@ WOLFSSL_LOCAL int wolfSSL_RSA_To_Der(WOLFSSL_RSA* rsa, byte** outBuf,
 
 #ifdef WOLFSSL_QUIC
 #define WOLFSSL_IS_QUIC(s)  (s->quic.method != NULL)
+WOLFSSL_LOCAL void QuicFreeResources(WOLFSSL* ssl);
 #else
 #define WOLFSSL_IS_QUIC(s) 0
-#endif
+#endif /* WOLFSSL_QUIC (else) */
 
 #ifdef __cplusplus
     }  /* extern "C" */
