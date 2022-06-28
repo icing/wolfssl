@@ -43,15 +43,6 @@
 
 #include <wolfssl/openssl/buffer.h>
 
-typedef struct QuicRecord {
-    struct QuicRecord *next;
-    uint8_t *data;
-    word32 capacity;
-    word32 len;
-    word32 idx;
-    WOLFSSL_ENCRYPTION_LEVEL level;
-} QuicEncData;
-
 static int qr_length(const uint8_t *data, size_t len)
 {
     word32 rlen;
@@ -66,19 +57,22 @@ static void quic_record_free(WOLFSSL *ssl, QuicRecord *r)
 {
     (void)ssl;
     if (r->data) {
+        ForceZero(r->data, r->capacity);
         XFREE(r->data, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
     }
     XFREE(r, ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
 }
 
 
-static QuicRecord *quic_record_make(WOLFSSL *ssl, const uint8_t *data, size_t len)
+static QuicRecord *quic_record_make(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
+                                    const uint8_t *data, size_t len)
 {
     QuicRecord *qr;
 
     qr = XMALLOC(sizeof(*qr), ssl->heap, DYNAMIC_TYPE_TMP_BUFFER);
     if (qr) {
         memset(qr, 0, sizeof(*qr));
+        qr->level = level;
         qr->capacity = qr->len = qr_length(data, len);
         if (qr->capacity == 0) {
             qr->capacity = 2*1024;
@@ -189,10 +183,21 @@ static int ctx_check_quic_compat(const WOLFSSL_CTX *ctx)
     return WOLFSSL_SUCCESS;
 }
 
+static int check_method_sanity(const WOLFSSL_QUIC_METHOD *m)
+{
+    if (m && m->set_encryption_secrets
+        && m->add_handshake_data
+        && m->flush_flight
+        && m->send_alert) {
+        return WOLFSSL_SUCCESS;
+    }
+    return WOLFSSL_FAILURE;
+}
 
 int wolfSSL_CTX_set_quic_method(WOLFSSL_CTX *ctx, const WOLFSSL_QUIC_METHOD *quic_method)
 {
-    if (ctx_check_quic_compat(ctx) != WOLFSSL_SUCCESS) {
+    if (ctx_check_quic_compat(ctx) != WOLFSSL_SUCCESS
+        || check_method_sanity(quic_method) != WOLFSSL_SUCCESS) {
         return WOLFSSL_FAILURE;
     }
     ctx->quic.method = quic_method;
@@ -206,7 +211,8 @@ int wolfSSL_CTX_set_quic_method(WOLFSSL_CTX *ctx, const WOLFSSL_QUIC_METHOD *qui
 
 int wolfSSL_set_quic_method(WOLFSSL *ssl, const WOLFSSL_QUIC_METHOD *quic_method)
 {
-    if (ctx_check_quic_compat(ssl->ctx) != WOLFSSL_SUCCESS) {
+    if (ctx_check_quic_compat(ssl->ctx) != WOLFSSL_SUCCESS
+        || check_method_sanity(quic_method) != WOLFSSL_SUCCESS) {
         return WOLFSSL_FAILURE;
     }
     ssl->quic.method = quic_method;
@@ -245,6 +251,11 @@ int wolfSSL_set_quic_transport_params(WOLFSSL *ssl,
 
     WOLFSSL_ENTER("SSL_set_quic_transport_params");
 
+    if (!wolfSSL_is_quic(ssl)) {
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
     if (!params || params_len == 0) {
         nparams = NULL;
         params_len = 0;
@@ -268,9 +279,9 @@ cleanup:
 }
 
 
-void SSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
-                                        const uint8_t **out_params,
-                                        size_t *out_params_len)
+void wolfSSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
+                                            const uint8_t **out_params,
+                                            size_t *out_params_len)
 {
     if (ssl->quic.transport_params.peer_len) {
         *out_params = ssl->quic.transport_params.peer;
@@ -440,7 +451,7 @@ int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
         }
         else {
             /* start of next record with all bytes for the header */
-            ssl->quic.scratch = quic_record_make(ssl, data, len);
+            ssl->quic.scratch = quic_record_make(ssl, level, data, len);
             if (!ssl->quic.scratch) {
                 ret = WOLFSSL_FAILURE;
                 goto cleanup;

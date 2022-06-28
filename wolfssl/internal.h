@@ -3424,6 +3424,14 @@ typedef enum WOLFSSL_SESSION_TYPE {
 
 #ifdef WOLFSSL_QUIC
 typedef struct QuicRecord QuicRecord;
+typedef struct QuicRecord {
+    struct QuicRecord *next;
+    uint8_t *data;
+    word32 capacity;
+    word32 len;
+    word32 idx;
+    WOLFSSL_ENCRYPTION_LEVEL level;
+} QuicEncData;
 #endif /* WOLFSSL_QUIC */
 
 /* wolfSSL session type */

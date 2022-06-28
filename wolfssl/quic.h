@@ -70,9 +70,9 @@ WOLFSSL_API WOLFSSL_ENCRYPTION_LEVEL wolfSSL_quic_write_level(const WOLFSSL *ssl
 WOLFSSL_API int wolfSSL_set_quic_transport_params(WOLFSSL *ssl,
                                                   const uint8_t *params,
                                                   size_t params_len);
-WOLFSSL_API void SSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
-                                                    const uint8_t **out_params,
-                                                    size_t *out_params_len);
+WOLFSSL_API void wolfSSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
+                                                        const uint8_t **out_params,
+                                                        size_t *out_params_len);
 
 
 WOLFSSL_API size_t wolfSSL_quic_max_handshake_flight_len(const WOLFSSL *ssl,
