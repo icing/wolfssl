@@ -3429,7 +3429,8 @@ typedef struct QuicRecord {
     uint8_t *data;
     word32 capacity;
     word32 len;
-    word32 idx;
+    word32 start;
+    word32 end;
     WOLFSSL_ENCRYPTION_LEVEL level;
 } QuicEncData;
 #endif /* WOLFSSL_QUIC */
@@ -5520,6 +5521,8 @@ WOLFSSL_LOCAL int wolfSSL_RSA_To_Der(WOLFSSL_RSA* rsa, byte** outBuf,
 #ifdef WOLFSSL_QUIC
 #define WOLFSSL_IS_QUIC(s)  (s->quic.method != NULL)
 WOLFSSL_LOCAL void QuicFreeResources(WOLFSSL* ssl);
+WOLFSSL_LOCAL int wolfSSL_quic_receive(WOLFSSL* ssl, byte* buf, word32 sz);
+WOLFSSL_LOCAL int wolfSSL_quic_send(WOLFSSL* ssl);
 #else
 #define WOLFSSL_IS_QUIC(s) 0
 #endif /* WOLFSSL_QUIC (else) */

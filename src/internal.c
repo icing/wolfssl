@@ -9193,6 +9193,15 @@ static int wolfSSLReceive(WOLFSSL* ssl, byte* buf, word32 sz)
     int recvd;
     int retryLimit = WOLFSSL_MODE_AUTO_RETRY_ATTEMPTS;
 
+#ifdef WOLFSSL_QUIC
+    if (WOLFSSL_IS_QUIC(ssl)) {
+        /* QUIC only "reads" from data provided by the application
+         * via wolfSSL_provide_quic_data(). Transfer from there
+         * into the inputBuffer. */
+        return wolfSSL_quic_receive(ssl, buf, sz);
+    }
+#endif
+
     if (ssl->CBIORecv == NULL) {
         WOLFSSL_MSG("Your IO Recv callback is null, please set");
         return -1;
@@ -9344,6 +9353,12 @@ void ShrinkInputBuffer(WOLFSSL* ssl, int forcedFree)
 
 int SendBuffered(WOLFSSL* ssl)
 {
+#ifdef WOLFSSL_QUIC
+    if (WOLFSSL_IS_QUIC(ssl)) {
+        return wolfSSL_quic_send(ssl);
+    }
+#endif
+
     if (ssl->CBIOSend == NULL) {
         WOLFSSL_MSG("Your IO Send callback is null, please set");
         return SOCKET_ERROR_E;

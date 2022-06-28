@@ -88,7 +88,12 @@ static QuicRecord *quic_record_make(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level
 
 static int quic_record_complete(QuicRecord *r)
 {
-    return r->len && r->idx >= r->len;
+    return r->len && r->end >= r->len;
+}
+
+static int quic_record_done(QuicRecord *r)
+{
+    return r->len && r->end >= r->len && r->start >= r->end;
 }
 
 static int quic_record_append(WOLFSSL *ssl, QuicRecord *qr, const uint8_t *data,
@@ -99,20 +104,20 @@ static int quic_record_append(WOLFSSL *ssl, QuicRecord *qr, const uint8_t *data,
 
     (void)ssl;
     if (!qr->len && len) {
-        missing = 4 - qr->idx;
+        missing = 4 - qr->end;
         if (len < missing) {
-            XMEMCPY(qr->data + qr->idx, data, len);
-            qr->idx += len;
+            XMEMCPY(qr->data + qr->end, data, len);
+            qr->end += len;
             consumed = len;
             goto cleanup; /* len consumed, but qr->len still unkown */
         }
-        XMEMCPY(qr->data + qr->idx, data, missing);
-        qr->idx += missing;
+        XMEMCPY(qr->data + qr->end, data, missing);
+        qr->end += missing;
         len -= missing;
         data += missing;
         consumed = missing;
 
-        qr->len = qr_length(qr->data, qr->idx);
+        qr->len = qr_length(qr->data, qr->end);
         if (qr->len > qr->capacity) {
             uint8_t *ndata = XREALLOC(qr->data, qr->len, ssl->head, DYNAMIC_TYPE_TMP_BUFFER);
             if (!ndata) {
@@ -128,17 +133,30 @@ static int quic_record_append(WOLFSSL *ssl, QuicRecord *qr, const uint8_t *data,
         return 0;
     }
 
-    missing = qr->len - qr->idx;
+    missing = qr->len - qr->end;
     if (len > missing) {
         len = missing;
     }
-    XMEMCPY(qr->data + qr->idx, data, len);
-    qr->idx += len;
+    XMEMCPY(qr->data + qr->end, data, len);
+    qr->end += len;
     consumed += len;
 
 cleanup:
     *pconsumed = (ret == WOLFSSL_SUCCESS)? consumed : 0;
     return ret;
+}
+
+
+static word32 quic_record_transfer(QuicRecord *qr, byte *buf, word32 sz)
+{
+    word32 len = min(qr->end - qr->start, sz);
+
+    if (len <= 0) {
+        return 0;
+    }
+    XMEMCPY(buf, qr->data + qr->start, len);
+    qr->start += len;
+    return len;
 }
 
 
@@ -461,6 +479,67 @@ int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
 
 cleanup:
     WOLFSSL_LEAVE("wolfSSL_provide_quic_data", ret);
+    return ret;
+}
+
+
+/* Called internally when SSL wants a certain amount of input. */
+int wolfSSL_quic_receive(WOLFSSL* ssl, byte* buf, word32 sz)
+{
+    word32 n, transferred = 0;
+
+    WOLFSSL_ENTER("wolfSSL_quic_receive");
+    while (sz > 0) {
+        n = 0;
+        if (ssl->quic.input_head) {
+            n = quic_record_transfer(ssl->quic.input_head, buf, sz);
+            if (quic_record_done(ssl->quic.input_head)) {
+                QuicRecord *qr = ssl->quic.input_head;
+                ssl->quic.input_head = qr->next;
+                if (!qr->next) {
+                    ssl->quic.input_tail = NULL;
+                }
+                quic_record_free(ssl, qr);
+            }
+        }
+
+        if (n == 0) {
+            if (transferred > 0) {
+                goto cleanup;
+            }
+            return WANT_READ;
+        }
+        sz -= n;
+        buf += n;
+        transferred += n;
+    }
+cleanup:
+    WOLFSSL_LEAVE("wolfSSL_quic_receive", transferred);
+    return transferred;
+}
+
+
+int wolfSSL_quic_send(WOLFSSL* ssl)
+{
+    int ret = 0;
+
+    WOLFSSL_ENTER("wolfSSL_quic_send");
+    if (ssl->buffers.outputBuffer.length > 0) {
+        /* TODO: Are we in handshake? */
+        ret = ssl->quic.method->add_handshake_data(
+            ssl, ssl->quic.enc_level_write,
+            (const uint8_t*)ssl->buffers.outputBuffer.buffer +
+                ssl->buffers.outputBuffer.idx,
+            ssl->buffers.outputBuffer.length);
+        if (!ret) {
+            /* The application has an error. General desaster. */
+            WOLFSSL_MSG("WOLFSSL_QUIC_SEND application returned error");
+            ret = -1;
+            goto cleanup;
+        }
+    }
+cleanup:
+    WOLFSSL_LEAVE("wolfSSL_quic_send", ret);
     return ret;
 }
 

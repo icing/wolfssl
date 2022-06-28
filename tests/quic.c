@@ -216,13 +216,13 @@ static void dump_buffers(WOLFSSL *ssl, FILE *fp)
 
     fprintf(fp, "SSL quic data buffered: \n");
     while (qr) {
-        fprintf(fp, "  - %d/%d (cap %d, level=%d)\n",
-                qr->idx, qr->len, qr->capacity, qr->level);
+        fprintf(fp, "  - %d-%d/%d (cap %d, level=%d)\n",
+                qr->start, qr->end, qr->len, qr->capacity, qr->level);
         qr = qr->next;
     }
     if ((qr = ssl->quic.scratch)) {
-        fprintf(fp, "  scratch: %d/%d (cap %d, level=%d)\n",
-                qr->idx, qr->len, qr->capacity, qr->level);
+        fprintf(fp, "  scratch: %d-%d/%d (cap %d, level=%d)\n",
+                qr->start, qr->end, qr->len, qr->capacity, qr->level);
     }
     else {
         fprintf(fp, "  scratch: -\n");
