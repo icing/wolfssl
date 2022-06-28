@@ -6583,6 +6583,9 @@ int InitSSL(WOLFSSL* ssl, WOLFSSL_CTX* ctx, int writeDup)
         ssl->numGroups = ctx->numGroups;
     }
 #endif
+#ifdef WOLFSSL_QUIC
+    ssl->quic.method = ctx->quic.method;
+#endif
 
 #ifdef HAVE_TLS_EXTENSIONS
 #ifdef HAVE_MAX_FRAGMENT
