@@ -18230,6 +18230,10 @@ size_t wolfSSL_get_client_random(const WOLFSSL* ssl, unsigned char* out,
         InitX509(&ssl->peerCert, 0, ssl->heap);
 #endif
 
+#ifdef WOLFSSL_QUIC
+        wolfSSL_quic_clear(ssl);
+#endif
+
         return WOLFSSL_SUCCESS;
     }
 

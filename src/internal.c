@@ -7496,7 +7496,7 @@ void SSL_ResourceFree(WOLFSSL* ssl)
     Dtls13FreeFsmResources(ssl);
 #endif /* WOLFSSL_DTLS13 */
 #ifdef WOLFSSL_QUIC
-    QuicFreeResources(ssl);
+    wolfSSL_quic_free(ssl);
 #endif
 }
 
@@ -9353,13 +9353,7 @@ void ShrinkInputBuffer(WOLFSSL* ssl, int forcedFree)
 
 int SendBuffered(WOLFSSL* ssl)
 {
-#ifdef WOLFSSL_QUIC
-    if (WOLFSSL_IS_QUIC(ssl)) {
-        return wolfSSL_quic_send(ssl);
-    }
-#endif
-
-    if (ssl->CBIOSend == NULL) {
+    if (ssl->CBIOSend == NULL && !WOLFSSL_IS_QUIC(ssl)) {
         WOLFSSL_MSG("Your IO Send callback is null, please set");
         return SOCKET_ERROR_E;
     }
@@ -9369,6 +9363,12 @@ int SendBuffered(WOLFSSL* ssl)
         WOLFSSL_MSG("Data to send");
         WOLFSSL_BUFFER(ssl->buffers.outputBuffer.buffer,
                        ssl->buffers.outputBuffer.length);
+    }
+#endif
+
+#ifdef WOLFSSL_QUIC
+    if (WOLFSSL_IS_QUIC(ssl)) {
+        return wolfSSL_quic_send(ssl);
     }
 #endif
 
@@ -21470,6 +21470,16 @@ static int SendAlert_ex(WOLFSSL* ssl, int severity, int type)
     int  dtlsExtra = 0;
 
     WOLFSSL_ENTER("SendAlert");
+
+#ifdef WOLFSSL_QUIC
+    if (WOLFSSL_IS_QUIC(ssl)) {
+        ret = !ssl->quic.method->send_alert(ssl, ssl->quic.enc_level_write, (uint8_t)type);
+        if (ret) {
+            WOLFSSL_MSG("QUIC send_alert callback error");
+        }
+        return ret;
+    }
+#endif
 
 #ifdef HAVE_WRITE_DUP
     if (ssl->dupWrite && ssl->dupSide == READ_DUP_SIDE) {

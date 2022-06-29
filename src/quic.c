@@ -160,14 +160,16 @@ static word32 quic_record_transfer(QuicRecord *qr, byte *buf, word32 sz)
 }
 
 
-void QuicFreeResources(WOLFSSL* ssl)
+void wolfSSL_quic_clear(WOLFSSL* ssl)
 {
     QuicEncData *qd;
 
-    if (ssl->quic.transport_params.our) {
-        XFREE(ssl->quic.transport_params.our, ssl->heap, DYNAMIC_TYPE_SSL);
-        ssl->quic.transport_params.our = NULL;
-    }
+    /* keep
+     * - ssl->quic.transport_params.our
+     * - ssl->quic.method
+     * - ssl->quic.transport_version
+     * reset/free everything else
+     */
     if (ssl->quic.transport_params.peer) {
         XFREE(ssl->quic.transport_params.peer, ssl->heap, DYNAMIC_TYPE_SSL);
         ssl->quic.transport_params.peer = NULL;
@@ -176,6 +178,9 @@ void QuicFreeResources(WOLFSSL* ssl)
         XFREE(ssl->quic.transport_params.peer_draft, ssl->heap, DYNAMIC_TYPE_SSL);
         ssl->quic.transport_params.peer_draft = NULL;
     }
+    ssl->quic.enc_level_read = wolfssl_encryption_initial;
+    ssl->quic.enc_level_write = wolfssl_encryption_initial;
+    ssl->quic.enc_level_latest_recvd = wolfssl_encryption_initial;
 
     while ((qd = ssl->quic.input_head)) {
         ssl->quic.input_head = qd->next;
@@ -187,6 +192,17 @@ void QuicFreeResources(WOLFSSL* ssl)
         quic_record_free(ssl, ssl->quic.scratch);
         ssl->quic.scratch = NULL;
     }
+}
+
+
+void wolfSSL_quic_free(WOLFSSL* ssl)
+{
+    wolfSSL_quic_clear(ssl);
+    if (ssl->quic.transport_params.our) {
+        XFREE(ssl->quic.transport_params.our, ssl->heap, DYNAMIC_TYPE_SSL);
+        ssl->quic.transport_params.our = NULL;
+    }
+
     ssl->quic.method = NULL;
 }
 
@@ -411,8 +427,11 @@ int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl)
         goto cleanup;
     }
 
-    while (ssl->quic.input_head != NULL) {
-        /* TODO: process and consume the data for handshake */
+    while (ssl->quic.input_head != NULL
+        && ssl->options.handShakeState != HANDSHAKE_DONE) {
+        if ((ret = wolfSSL_SSL_do_handshake(ssl)) != WOLFSSL_SUCCESS) {
+            goto cleanup;
+        }
     }
 
 cleanup:

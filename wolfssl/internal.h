@@ -5519,10 +5519,12 @@ WOLFSSL_LOCAL int wolfSSL_RSA_To_Der(WOLFSSL_RSA* rsa, byte** outBuf,
 #endif
 
 #ifdef WOLFSSL_QUIC
-#define WOLFSSL_IS_QUIC(s)  (s->quic.method != NULL)
-WOLFSSL_LOCAL void QuicFreeResources(WOLFSSL* ssl);
+#define WOLFSSL_IS_QUIC(s)  (s && s->quic.method != NULL)
 WOLFSSL_LOCAL int wolfSSL_quic_receive(WOLFSSL* ssl, byte* buf, word32 sz);
 WOLFSSL_LOCAL int wolfSSL_quic_send(WOLFSSL* ssl);
+WOLFSSL_LOCAL void wolfSSL_quic_clear(WOLFSSL* ssl);
+WOLFSSL_LOCAL void wolfSSL_quic_free(WOLFSSL* ssl);
+
 #else
 #define WOLFSSL_IS_QUIC(s) 0
 #endif /* WOLFSSL_QUIC (else) */
