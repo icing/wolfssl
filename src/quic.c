@@ -563,6 +563,81 @@ cleanup:
 }
 
 
+int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
+                                 enum DeriveKeyType ktype,
+                                 enum encrypt_side side)
+{
+    const uint8_t *rx_secret = NULL, *tx_secret = NULL;
+    WOLFSSL_ENCRYPTION_LEVEL level;
+    int ret = 1;
+    size_t secret_len;
+
+    WOLFSSL_ENTER("wolfSSL_quic_forward_secrets");
+    switch (ktype) {
+        case early_data_key:
+            level = wolfssl_encryption_early_data;
+            break;
+        case handshake_key:
+            level = wolfssl_encryption_handshake;
+            break;
+        case traffic_key:
+            level = wolfssl_encryption_application;
+            break;
+        case update_traffic_key:
+            /* TODO: not sure, fail for now */
+            WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS update traffic secret unsupported");
+            goto cleanup;
+        case no_key:
+            FALL_THROUGH;
+        default:
+            WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS unknown level");
+            goto cleanup;
+    }
+
+    if (side == ENCRYPT_AND_DECRYPT_SIDE || side == ENCRYPT_SIDE_ONLY) {
+        tx_secret = (ssl->options.side == WOLFSSL_CLIENT_END)?
+            ssl->clientSecret : ssl->serverSecret;
+    }
+    if (side == ENCRYPT_AND_DECRYPT_SIDE || side == DECRYPT_SIDE_ONLY) {
+        rx_secret = (ssl->options.side == WOLFSSL_CLIENT_END)?
+            ssl->serverSecret : ssl->clientSecret;
+    }
+
+    if (!tx_secret && !rx_secret) {
+        WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS neither enc- nor decrypt specified");
+        goto cleanup;
+    }
+
+    switch (ssl->specs.mac_algorithm) {
+    #ifndef NO_SHA256
+        case sha256_mac:
+            secret_len = WC_SHA256_DIGEST_SIZE;
+            break;
+    #endif
+    #ifdef WOLFSSL_SHA384
+        case sha384_mac:
+            secret_len = WC_SHA384_DIGEST_SIZE;
+            break;
+    #endif
+    #ifdef WOLFSSL_TLS13_SHA512
+        case sha512_mac:
+            secret_len = WC_SHA512_DIGEST_SIZE;
+            break;
+    #endif
+        default:
+            WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS unable to determine "
+                "secret length from mac_algorithm");
+            goto cleanup;
+    }
+
+    ret = !ssl->quic.method->set_encryption_secrets(ssl, level, rx_secret, tx_secret,
+                                                    secret_len);
+
+cleanup:
+    WOLFSSL_LEAVE("wolfSSL_quic_forward_secrets", ret);
+    return ret;
+}
+
 #endif /* WOLFSSL_QUIC */
 #endif /* WOLFCRYPT_ONLY */
 

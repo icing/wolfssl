@@ -1235,6 +1235,12 @@ int DeriveTls13Keys(WOLFSSL* ssl, int secret, int side, int store)
             break;
     }
 
+#ifdef WOLFSSL_QUIC
+    if (WOLFSSL_IS_QUIC(ssl)) {
+        return wolfSSL_quic_forward_secrets(ssl, secret, side);
+    }
+#endif /* WOLFSSL_QUIC */
+
     if (!store)
         goto end;
 
