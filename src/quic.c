@@ -42,6 +42,10 @@
 #include <wolfssl/internal.h>
 
 #include <wolfssl/openssl/buffer.h>
+#include <wolfssl/openssl/ecdsa.h>
+#include <wolfssl/openssl/evp.h>
+#include <wolfssl/openssl/kdf.h>
+
 
 static int qr_length(const uint8_t *data, size_t len)
 {
@@ -396,19 +400,6 @@ void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled)
 #endif /* WOLFSSL_EARLY_DATA */
 
 
-int wolfSSL_CIPHER_get_prf_nid(const WOLFSSL_CIPHER *c)
-{
-    /* TODO: extract the NID of the pseudo random function (PRF)
-     * used with the cipher. This is an addition in the quictls-openssl
-     * patch, but ngtcp2 does *not* use it. Instead it retrieves the
-     * current cipher from the SSL* and figures the MD by looking at the
-     * cipher id.
-     */
-     (void)c;
-     return WOLFSSL_FAILURE;
-}
-
-
 int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl)
 {
     int ret = WOLFSSL_SUCCESS;
@@ -565,12 +556,12 @@ cleanup:
 
 int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
                                  enum DeriveKeyType ktype,
-                                 enum encrypt_side side)
+                                 enum encrypt_side side,
+                                 size_t secret_len)
 {
     const uint8_t *rx_secret = NULL, *tx_secret = NULL;
     WOLFSSL_ENCRYPTION_LEVEL level;
     int ret = 1;
-    size_t secret_len;
 
     WOLFSSL_ENTER("wolfSSL_quic_forward_secrets");
     switch (ktype) {
@@ -608,28 +599,6 @@ int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
         goto cleanup;
     }
 
-    switch (ssl->specs.mac_algorithm) {
-    #ifndef NO_SHA256
-        case sha256_mac:
-            secret_len = WC_SHA256_DIGEST_SIZE;
-            break;
-    #endif
-    #ifdef WOLFSSL_SHA384
-        case sha384_mac:
-            secret_len = WC_SHA384_DIGEST_SIZE;
-            break;
-    #endif
-    #ifdef WOLFSSL_TLS13_SHA512
-        case sha512_mac:
-            secret_len = WC_SHA512_DIGEST_SIZE;
-            break;
-    #endif
-        default:
-            WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS unable to determine "
-                "secret length from mac_algorithm");
-            goto cleanup;
-    }
-
     ret = !ssl->quic.method->set_encryption_secrets(ssl, level, rx_secret, tx_secret,
                                                     secret_len);
 
@@ -637,6 +606,289 @@ cleanup:
     WOLFSSL_LEAVE("wolfSSL_quic_forward_secrets", ret);
     return ret;
 }
+
+
+const WOLFSSL_EVP_CIPHER *wolfSSL_quic_get_aead(WOLFSSL *ssl)
+{
+    return wolfSSL_EVP_get_cipherbynid(
+        wolfSSL_CIPHER_get_id(
+            wolfSSL_get_current_cipher(ssl)));
+}
+
+static int evp_cipher_eq(const WOLFSSL_EVP_CIPHER *c1, const WOLFSSL_EVP_CIPHER *c2)
+{
+    /* We could check on nid equality, but we seem to have singulars */
+    return c1 == c2;
+}
+
+const WOLFSSL_EVP_CIPHER *wolfSSL_quic_get_hp(WOLFSSL *ssl)
+{
+    const WOLFSSL_EVP_CIPHER *aead = wolfSSL_quic_get_aead(ssl);
+
+#ifdef WOLFSSL_AES_COUNTER
+#ifdef WOLFSSL_AES_128
+    if (evp_cipher_eq(aead, wolfSSL_EVP_aes_128_gcm())) {
+        return wolfSSL_EVP_aes_128_ctr();
+    }
+#endif
+
+#ifdef WOLFSSL_AES_256
+    if (evp_cipher_eq(aead, wolfSSL_EVP_aes_256_gcm())) {
+        return wolfSSL_EVP_aes_256_ctr();
+    }
+#endif
+#endif
+
+    if (evp_cipher_eq(aead, wolfSSL_EVP_chacha20_poly1305())) {
+        return aead;
+    }
+
+    return NULL;
+}
+
+size_t wolfSSL_quic_get_aead_tag_len(const WOLFSSL_EVP_CIPHER *aead)
+{
+    WOLFSSL_EVP_CIPHER_CTX ctx;
+
+    XMEMSET(&ctx, 0, sizeof(ctx));
+    if (wolfSSL_EVP_CipherInit(&ctx, aead, NULL, NULL, 0) != WOLFSSL_SUCCESS) {
+        return 0;
+    }
+    return ctx.authTagSz;
+}
+
+int wolfSSL_quic_aead_is_gcm(const WOLFSSL_EVP_CIPHER *aead)
+{
+    if (evp_cipher_eq(aead, wolfSSL_EVP_aes_128_gcm())
+#ifdef WOLFSSL_AES_256
+        || evp_cipher_eq(aead, wolfSSL_EVP_aes_256_gcm())
+#endif
+    ) {
+        return 1;
+    }
+    return 0;
+}
+
+int wolfSSL_quic_aead_is_ccm(const WOLFSSL_EVP_CIPHER *aead)
+{
+    /* Seems currently not supported */
+    (void)aead;
+    return 0;
+}
+
+int wolfSSL_quic_aead_is_chacha20(const WOLFSSL_EVP_CIPHER *aead)
+{
+    return evp_cipher_eq(aead, wolfSSL_EVP_chacha20_poly1305());
+}
+
+const WOLFSSL_EVP_MD *wolfSSL_quic_get_md(WOLFSSL *ssl)
+{
+    /* a copy from the handshake md setup */
+    switch(ssl->specs.mac_algorithm) {
+        case no_mac:
+    #ifndef NO_MD5
+        case md5_mac:
+            return wolfSSL_EVP_md5();
+    #endif
+    #ifndef NO_SHA
+        case sha_mac:
+            return wolfSSL_EVP_sha1();
+    #endif
+    #ifdef WOLFSSL_SHA224
+        case sha224_mac:
+            return wolfSSL_EVP_sha224();
+    #endif
+        case sha256_mac:
+            return wolfSSL_EVP_sha256();
+    #ifdef WOLFSSL_SHA384
+        case sha384_mac:
+            return wolfSSL_EVP_sha384();
+    #endif
+    #ifdef WOLFSSL_SHA512
+        case sha512_mac:
+            return wolfSSL_EVP_sha512();
+    #endif
+        case rmd_mac:
+        case blake2b_mac:
+            WOLFSSL_MSG("no suitable EVP_MD");
+            return NULL;
+        default:
+            WOLFSSL_MSG("Unknown mac algorithm");
+            return NULL;
+    }
+}
+
+
+int wolfSSL_quic_hkdf_extract(uint8_t *dest, const WOLFSSL_EVP_MD *md,
+                              const uint8_t *secret, size_t secretlen,
+                              const uint8_t *salt, size_t saltlen)
+{
+    WOLFSSL_EVP_PKEY_CTX *pctx = NULL;
+    size_t destlen = (size_t)wolfSSL_EVP_MD_size(md);
+    int ret = WOLFSSL_SUCCESS;
+
+    WOLFSSL_ENTER("wolfSSL_quic_hkdf_extract");
+
+    pctx = wolfSSL_EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+    if (pctx == NULL) {
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    if (wolfSSL_EVP_PKEY_derive_init(pctx) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_hkdf_mode(pctx, EVP_PKEY_HKDEF_MODE_EXTRACT_ONLY) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set_hkdf_md(pctx, md) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set1_hkdf_salt(pctx, (byte*)salt, (int)saltlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set1_hkdf_key(pctx, (byte*)secret, (int)secretlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_derive(pctx, dest, &destlen) != WOLFSSL_SUCCESS) {
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+cleanup:
+    if (pctx)
+        EVP_PKEY_CTX_free(pctx);
+    WOLFSSL_LEAVE("wolfSSL_quic_hkdf_extract", ret);
+    return ret;
+}
+
+
+int wolfSSL_quic_hkdf_expand(uint8_t *dest, size_t destlen,
+                             const WOLFSSL_EVP_MD *md,
+                             const uint8_t *secret, size_t secretlen,
+                             const uint8_t *info, size_t infolen)
+{
+    WOLFSSL_EVP_PKEY_CTX *pctx = NULL;
+    int ret = WOLFSSL_SUCCESS;
+
+    WOLFSSL_ENTER("wolfSSL_quic_hkdf_expand");
+
+    pctx = wolfSSL_EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+    if (pctx == NULL) {
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    if (wolfSSL_EVP_PKEY_derive_init(pctx) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_hkdf_mode(pctx, EVP_PKEY_HKDEF_MODE_EXPAND_ONLY) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set_hkdf_md(pctx, md) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set1_hkdf_salt(pctx, (byte*)"", 0) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set1_hkdf_key(pctx, (byte*)secret, (int)secretlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_add1_hkdf_info(pctx, (byte*)info, (int)infolen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_derive(pctx, dest, &destlen) != WOLFSSL_SUCCESS) {
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+cleanup:
+    if (pctx)
+        EVP_PKEY_CTX_free(pctx);
+    WOLFSSL_LEAVE("wolfSSL_quic_hkdf_expand", ret);
+    return ret;
+}
+
+
+int wolfSSL_quic_hkdf(uint8_t *dest, size_t destlen,
+                      const WOLFSSL_EVP_MD *md,
+                      const uint8_t *secret, size_t secretlen,
+                      const uint8_t *salt, size_t saltlen,
+                      const uint8_t *info, size_t infolen)
+{
+    WOLFSSL_EVP_PKEY_CTX *pctx = NULL;
+    int ret = WOLFSSL_SUCCESS;
+
+    WOLFSSL_ENTER("wolfSSL_quic_hkdf");
+
+    pctx = wolfSSL_EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+    if (pctx == NULL) {
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    if (wolfSSL_EVP_PKEY_derive_init(pctx) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_hkdf_mode(pctx, EVP_PKEY_HKDEF_MODE_EXTRACT_AND_EXPAND) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set_hkdf_md(pctx, md) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set1_hkdf_salt(pctx, (byte*)salt, (int)saltlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_set1_hkdf_key(pctx, (byte*)secret, (int)secretlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_CTX_add1_hkdf_info(pctx, (byte*)info, (int)infolen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_PKEY_derive(pctx, dest, &destlen) != WOLFSSL_SUCCESS) {
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+cleanup:
+    if (pctx)
+        EVP_PKEY_CTX_free(pctx);
+    WOLFSSL_LEAVE("wolfSSL_quic_hkdf", ret);
+    return ret;
+}
+
+WOLFSSL_EVP_CIPHER_CTX *wolfSSL_quic_crypt_new(const WOLFSSL_EVP_CIPHER *cipher,
+                                               const uint8_t *key, const uint8_t *iv,
+                                               int encrypt)
+{
+    WOLFSSL_EVP_CIPHER_CTX *ctx;
+
+    ctx = wolfSSL_EVP_CIPHER_CTX_new();
+    if (ctx == NULL) {
+        return NULL;
+    }
+
+    if (wolfSSL_EVP_CipherInit(ctx, cipher, key, iv, encrypt) != WOLFSSL_SUCCESS) {
+        wolfSSL_EVP_CIPHER_CTX_free(ctx);
+        return NULL;
+    }
+
+    return ctx;
+}
+
+
+int wolfSSL_quic_aead_encrypt(uint8_t *dest, WOLFSSL_EVP_CIPHER_CTX *ctx,
+                              const uint8_t *plain, size_t plainlen,
+                              const uint8_t *iv, const uint8_t *aad, size_t aadlen)
+{
+    int len;
+
+    if (wolfSSL_EVP_CipherInit(ctx, NULL, NULL, iv, 1) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CipherUpdate(ctx, NULL, &len, aad, (int)aadlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CipherUpdate(ctx, dest, &len, plain,
+                                    (int)plainlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CipherFinal(ctx, dest + len, &len) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG, ctx->authTagSz,
+                                       dest + plainlen) != WOLFSSL_SUCCESS) {
+        return WOLFSSL_FAILURE;
+    }
+
+    return WOLFSSL_SUCCESS;
+}
+
+
+int wolfSSL_quic_aead_decrypt(uint8_t *dest, WOLFSSL_EVP_CIPHER_CTX *ctx,
+                              const uint8_t *enc, size_t enclen,
+                              const uint8_t *iv, const uint8_t *aad, size_t aadlen)
+{
+    int len;
+    const uint8_t *tag;
+
+    if (enclen > INT_MAX || ctx->authTagSz > (int)enclen) {
+        return WOLFSSL_FAILURE;
+    }
+
+    enclen -= ctx->authTagSz;
+    tag = enc + enclen;
+
+    if (wolfSSL_EVP_CipherInit(ctx, NULL, NULL, iv, 0) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
+                                       ctx->authTagSz, (uint8_t *)tag) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CipherUpdate(ctx, NULL, &len, aad, (int)aadlen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CipherUpdate(ctx, dest, &len, enc, (int)enclen) != WOLFSSL_SUCCESS
+        || wolfSSL_EVP_CipherFinal(ctx, dest, &len) != WOLFSSL_SUCCESS) {
+        return WOLFSSL_FAILURE;
+    }
+
+    return WOLFSSL_SUCCESS;
+}
+
 
 #endif /* WOLFSSL_QUIC */
 #endif /* WOLFCRYPT_ONLY */

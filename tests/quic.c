@@ -305,6 +305,74 @@ static int test_provide_quic_data(void) {
 }
 
 
+static int test_quic_crypt(void) {
+    WOLFSSL_CTX *ctx;
+    WOLFSSL *ssl;
+    const WOLFSSL_EVP_CIPHER *aead;
+    int ret = 0;
+
+    AssertNotNull(ctx = wolfSSL_CTX_new(wolfTLSv1_3_client_method()));
+    AssertTrue(wolfSSL_CTX_set_quic_method(ctx, &dummy_method) == WOLFSSL_SUCCESS);
+    AssertNotNull(ssl = wolfSSL_new(ctx));
+
+    /* don't have an AEAD cipher selected before start */
+    AssertTrue(wolfSSL_CIPHER_get_id(wolfSSL_get_current_cipher(ssl)) == 0);
+    AssertNotNull(aead = wolfSSL_EVP_aes_128_gcm());
+    AssertTrue(wolfSSL_quic_aead_is_gcm(aead) != 0);
+    AssertTrue(wolfSSL_quic_aead_is_ccm(aead) == 0);
+    AssertTrue(wolfSSL_quic_aead_is_chacha20(aead) == 0);
+
+    if (1) {
+        /* check that our enc-/decrypt support in quic rount-trips */
+        static const uint8_t key[16] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                                        0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+        static const uint8_t aad[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
+        static const uint8_t iv[] = {20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+        static const uint8_t plaintext[] = "hello world\nhello world\nhello world\nhello world\nhello world\nhello world\nhello world\n";
+        static const uint8_t expected[] = {0xd3, 0xa8, 0x1d, 0x96, 0x4c, 0x9b, 0x02, 0xd7, 0x9a, 0xb0, 0x41, 0x07, 0x4c, 0x8c, 0xe2,
+                                           0xe0, 0x2e, 0x83, 0x54, 0x52, 0x45, 0xcb, 0xd4, 0x68, 0xc8, 0x43, 0x45, 0xca, 0x91, 0xfb,
+                                           0xa3, 0x7a, 0x67, 0xed, 0xe8, 0xd7, 0x5e, 0xe2, 0x33, 0xd1, 0x3e, 0xbf, 0x50, 0xc2, 0x4b,
+                                           0x86, 0x83, 0x55, 0x11, 0xbb, 0x17, 0x4f, 0xf5, 0x78, 0xb8, 0x65, 0xeb, 0x9a, 0x2b, 0x8f,
+                                           0x77, 0x08, 0xa9, 0x60, 0x17, 0x73, 0xc5, 0x07, 0xf3, 0x04, 0xc9, 0x3f, 0x67, 0x4d, 0x12,
+                                           0xa1, 0x02, 0x93, 0xc2, 0x3c, 0xd3, 0xf8, 0x59, 0x33, 0xd5, 0x01, 0xc3, 0xbb, 0xaa, 0xe6,
+                                           0x3f, 0xbb, 0x23, 0x66, 0x94, 0x26, 0x28, 0x43, 0xa5, 0xfd, 0x2f};
+        WOLFSSL_EVP_CIPHER_CTX *enc_ctx, *dec_ctx;
+        uint8_t *encrypted, *decrypted;
+        size_t tag_len, enc_len, dec_len;
+
+        printf("   wolfSSL_quic_crypt(aes_128_gcm)");
+        AssertTrue((tag_len = wolfSSL_quic_get_aead_tag_len(aead)) == 16);
+        dec_len = sizeof(plaintext);
+        enc_len = dec_len + tag_len;
+        AssertNotNull(encrypted = XMALLOC(enc_len, NULL, DYNAMIC_TYPE_TMP_BUFFER));
+        AssertNotNull(decrypted = XMALLOC(dec_len, NULL, DYNAMIC_TYPE_TMP_BUFFER));
+
+        AssertNotNull(enc_ctx = wolfSSL_quic_crypt_new(aead, key, iv, 1));
+        AssertTrue(wolfSSL_quic_aead_encrypt(encrypted, enc_ctx,
+                                             plaintext, sizeof(plaintext),
+                                             NULL, aad, sizeof(aad)) == WOLFSSL_SUCCESS);
+        AssertTrue(memcmp(expected, encrypted, dec_len) == 0);
+        AssertTrue(memcmp(expected+dec_len, encrypted+dec_len, tag_len) == 0);
+
+        AssertNotNull(dec_ctx = wolfSSL_quic_crypt_new(aead, key, iv, 0));
+        AssertTrue(wolfSSL_quic_aead_decrypt(decrypted, dec_ctx,
+                                             encrypted, enc_len,
+                                             NULL, aad, sizeof(aad)) == WOLFSSL_SUCCESS);
+        AssertTrue(memcmp(plaintext, decrypted, dec_len) == 0);
+        printf(": %s\n", (ret == 0)? passed : failed);
+
+        XFREE(encrypted, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        XFREE(decrypted, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        wolfSSL_EVP_CIPHER_CTX_free(enc_ctx);
+        wolfSSL_EVP_CIPHER_CTX_free(dec_ctx);
+    }
+
+    wolfSSL_free(ssl);
+    wolfSSL_CTX_free(ctx);
+
+    return ret;
+}
+
 #endif /* WOLFSSL_QUIC */
 
 
@@ -316,6 +384,7 @@ int QuicTest(void)
 
     if ((ret = test_set_quic_method()) != 0) goto leave;
     if ((ret = test_provide_quic_data()) != 0) goto leave;
+    if ((ret = test_quic_crypt()) != 0) goto leave;
 
 leave:
     if (ret == 0)

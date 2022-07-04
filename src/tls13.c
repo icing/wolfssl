@@ -1237,7 +1237,34 @@ int DeriveTls13Keys(WOLFSSL* ssl, int secret, int side, int store)
 
 #ifdef WOLFSSL_QUIC
     if (WOLFSSL_IS_QUIC(ssl)) {
-        return wolfSSL_quic_forward_secrets(ssl, secret, side);
+        size_t secret_len;
+
+        /* this is a but "meh!" to determine this here again after
+         * the secrets have been generated. */
+        switch (ssl->specs.mac_algorithm) {
+        #ifndef NO_SHA256
+            case sha256_mac:
+                secret_len = WC_SHA256_DIGEST_SIZE;
+                break;
+        #endif
+        #ifdef WOLFSSL_SHA384
+            case sha384_mac:
+                secret_len = WC_SHA384_DIGEST_SIZE;
+                break;
+        #endif
+        #ifdef WOLFSSL_TLS13_SHA512
+            case sha512_mac:
+                secret_len = WC_SHA512_DIGEST_SIZE;
+                break;
+        #endif
+            default:
+                WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS unable to determine "
+                    "secret length from mac_algorithm");
+                ret = 1;
+                goto end;
+        }
+
+        return wolfSSL_quic_forward_secrets(ssl, secret, side, secret_len);
     }
 #endif /* WOLFSSL_QUIC */
 

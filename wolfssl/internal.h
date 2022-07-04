@@ -5526,7 +5526,8 @@ WOLFSSL_LOCAL void wolfSSL_quic_clear(WOLFSSL* ssl);
 WOLFSSL_LOCAL void wolfSSL_quic_free(WOLFSSL* ssl);
 WOLFSSL_LOCAL int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
                                                enum DeriveKeyType ktype,
-                                               enum encrypt_side side);
+                                               enum encrypt_side side,
+                                               size_t secret_len);
 #else
 #define WOLFSSL_IS_QUIC(s) 0
 #endif /* WOLFSSL_QUIC (else) */

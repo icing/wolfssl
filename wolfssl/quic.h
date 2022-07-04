@@ -47,23 +47,58 @@ typedef enum wolfssl_encryption_level_t {
 typedef struct wolfssl_quic_method_t WOLFSSL_QUIC_METHOD;
 
 struct wolfssl_quic_method_t {
+    /**
+     * Provide secrets to the QUIC stack when they becaome available in the SSL
+     * instance during handshake processing. read/write secrets have the same
+     * length. A call may only provide one, passing NULL as the other.
+     */
     int (*set_encryption_secrets)(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
                                   const uint8_t *read_secret,
                                   const uint8_t *write_secret, size_t secret_len);
+    /**
+     * Provide handshake packets to the QUIC stack to send to the peer. The
+     * QUIC stack will wrap these and take care of re-transmissions.
+     */
     int (*add_handshake_data)(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
                               const uint8_t *data, size_t len);
+    /**
+     * Flush any buffered packets during handshake.
+     */
     int (*flush_flight)(WOLFSSL *ssl);
+    /**
+     * Send a TLS alert that happend during handshake. In QUIC, such alerts
+     * lead to connection shutdown.
+     */
     int (*send_alert)(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level, uint8_t alert);
 };
 
 
+/**
+ * Mark the given SSL context for QUIC protocol handling. Meaning all
+ * SSL instances derived from it will inherit this. Provides all callbacks
+ * to the QUIC application the SSL stack needs.
+ */
 WOLFSSL_API int wolfSSL_CTX_set_quic_method(WOLFSSL_CTX *ctx,
                                             const WOLFSSL_QUIC_METHOD *quic_method);
+/**
+ * Mark extactly this SSL instance for QUIC protocol handling.
+ * Provides all callbacks to the QUIC application the SSL stack needs.
+ */
 WOLFSSL_API int wolfSSL_set_quic_method(WOLFSSL *ssl,
                                         const WOLFSSL_QUIC_METHOD *quic_method);
+
+/**
+ * Check if QUIC handling has been installed on the given SSL instance.
+ */
 WOLFSSL_API int wolfSSL_is_quic(WOLFSSL *ssl);
 
+/**
+ * Return the current encryption level of the SSL instance for READs.
+ */
 WOLFSSL_API WOLFSSL_ENCRYPTION_LEVEL wolfSSL_quic_read_level(const WOLFSSL *ssl);
+/**
+ * Return the current encryption level of the SSL instance for WRITEs.
+ */
 WOLFSSL_API WOLFSSL_ENCRYPTION_LEVEL wolfSSL_quic_write_level(const WOLFSSL *ssl);
 
 
@@ -74,12 +109,18 @@ WOLFSSL_API void wolfSSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
                                                         const uint8_t **out_params,
                                                         size_t *out_params_len);
 
+#ifdef WOLFSSL_EARLY_DATA
+WOLFSSL_API void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled);
+#endif
 
+/**
+ * Advisory amount of the maximum data a QUIC protocol handler should have
+ * in flight. This varies during handshake processing, for example certficate
+ * exchange will increase the limit.
+ */
 WOLFSSL_API size_t wolfSSL_quic_max_handshake_flight_len(const WOLFSSL *ssl,
                                                          WOLFSSL_ENCRYPTION_LEVEL level);
 
-
-WOLFSSL_API int wolfSSL_CIPHER_get_prf_nid(const WOLFSSL_CIPHER *c);
 
 enum {
     WOLFSSL_TLSEXT_QUIC_TP_PARAMS_DRAFT = 0xffa5,  /* value from draft-ietf-quic-tls-27 */
@@ -91,14 +132,105 @@ WOLFSSL_API void wolfSSL_set_quic_transport_version(WOLFSSL *ssl, int version);
 WOLFSSL_API int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl);
 
 
+/**
+ * The QUIC protocol handler provides peer TLS records to the SSL instance
+ * during handshake to progress it. The SSL instance will use the registered
+ * callbacks to send packets to the peer.
+ * Encryption level is provided to indicate how to decrypt the data. Data may
+ * be added for levels not yet reached by the SSL instance. However, data
+ * may only be added in ever increasing levels and levels may only increase
+ * at TLS record boundaries. Any violation will make this function fail.
+ */
 WOLFSSL_API int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
                                           const uint8_t *data, size_t len);
 
+/**
+ * Process any data still pending in the SSL instance after the handshake
+ * is complete.
+ */
 WOLFSSL_API int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl);
 
-#ifdef WOLFSSL_EARLY_DATA
-WOLFSSL_API void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled);
-#endif
+/**
+ * Get the AEAD cipher that is currently selected in the SSL instance.
+ * Will return NULL if none has been selected so far. This is used by the
+ * QUIC stack to encrypt/decrypt packets after the handshake.
+ */
+WOLFSSL_API const WOLFSSL_EVP_CIPHER *wolfSSL_quic_get_aead(WOLFSSL *ssl);
+
+/**
+ * Use to classify the AEAD cipher for key reuse limits.
+ */
+WOLFSSL_API int wolfSSL_quic_aead_is_gcm(const WOLFSSL_EVP_CIPHER *aead);
+WOLFSSL_API int wolfSSL_quic_aead_is_ccm(const WOLFSSL_EVP_CIPHER *aead);
+WOLFSSL_API int wolfSSL_quic_aead_is_chacha20(const WOLFSSL_EVP_CIPHER *aead);
+
+/**
+ * Get the 'tag' length used by the AEAD cipher. Encryption buffer lengths
+ * are plaintext length plus this tag length.
+ */
+WOLFSSL_API size_t wolfSSL_quic_get_aead_tag_len(const WOLFSSL_EVP_CIPHER *aead);
+
+/**
+ * The message digest currently selected in the SSL instance.
+ */
+WOLFSSL_API const WOLFSSL_EVP_MD *wolfSSL_quic_get_md(WOLFSSL *ssl);
+
+/**
+ * The QUIC header protection cipher matching the AEAD cipher currently
+ * selected in the SSL instance.
+ */
+WOLFSSL_API const WOLFSSL_EVP_CIPHER *wolfSSL_quic_get_hp(WOLFSSL *ssl);
+
+/**
+ * Create and initialize a cipher context for use in en- or decryption.
+ */
+WOLFSSL_API WOLFSSL_EVP_CIPHER_CTX *
+wolfSSL_quic_crypt_new(const WOLFSSL_EVP_CIPHER *cipher,
+                       const uint8_t *key, const uint8_t *iv, int encrypt);
+
+/**
+ * Use a previously created cipher context to encrypt the given plain text.
+ */
+WOLFSSL_API
+int wolfSSL_quic_aead_encrypt(uint8_t *dest, WOLFSSL_EVP_CIPHER_CTX *aead_ctx,
+                              const uint8_t *plain, size_t plainlen,
+                              const uint8_t *iv, const uint8_t *aad, size_t aadlen);
+/**
+ * Use a previously created cipher context to decrypt the given encoded text.
+ */
+WOLFSSL_API
+int wolfSSL_quic_aead_decrypt(uint8_t *dest, WOLFSSL_EVP_CIPHER_CTX *ctx,
+                              const uint8_t *enc, size_t enclen,
+                              const uint8_t *iv, const uint8_t *aad, size_t aadlen);
+
+/**
+ * Extract a pseudo-random key, using the given message digest, a secret and a salt.
+ * The key size is the size of the digest.
+ */
+WOLFSSL_API
+int wolfSSL_quic_hkdf_extract(uint8_t *dest, const WOLFSSL_EVP_MD *md,
+                              const uint8_t *secret, size_t secretlen,
+                              const uint8_t *salt, size_t saltlen);
+/**
+ * Expand a pseudo-random key (secret) into a new key, using the mesasge
+ * digest and the info bytes.
+ */
+WOLFSSL_API
+int wolfSSL_quic_hkdf_expand(uint8_t *dest, size_t destlen,
+                             const WOLFSSL_EVP_MD *md,
+                             const uint8_t *secret, size_t secretlen,
+                             const uint8_t *info, size_t infolen);
+
+/**
+ * Extract and extpand secret, salt and info into a new key.
+ */
+WOLFSSL_API
+int wolfSSL_quic_hkdf(uint8_t *dest, size_t destlen,
+                      const WOLFSSL_EVP_MD *md,
+                      const uint8_t *secret, size_t secretlen,
+                      const uint8_t *salt, size_t saltlen,
+                      const uint8_t *info, size_t infolen);
+
 
 #endif /* WOLFSSL_QUIC */
 #endif /* WOLFSSL_QUIC_H */

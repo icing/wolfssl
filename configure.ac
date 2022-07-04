@@ -4652,6 +4652,12 @@ then
     then
         AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_QUIC"
     fi
+    # Requires aesctr
+    if test "x$ENABLED_AESCTR" = "xno"
+    then
+        ENABLED_AESCTR="yes"
+    fi
+
 fi
 
 
