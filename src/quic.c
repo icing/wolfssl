@@ -164,6 +164,48 @@ static word32 quic_record_transfer(QuicRecord *qr, byte *buf, word32 sz)
 }
 
 
+const QuicTransportParam *QuicTransportParam_new(const uint8_t *data, size_t len, void *heap)
+{
+    QuicTransportParam *tp;
+
+    if (len > 65353) return NULL;
+    tp = XMALLOC(sizeof(*tp), heap, DYNAMIC_TYPE_TLSX);
+    if (!tp) return NULL;
+    tp->data = XMALLOC(len, heap, DYNAMIC_TYPE_TLSX);
+    if (!tp->data) {
+        XFREE(tp, heap, DYNAMIC_TYPE_TLSX);
+        return NULL;
+    }
+    XMEMCPY((uint8_t*)tp->data, data, len);
+    tp->len = len;
+    return tp;
+}
+
+const QuicTransportParam *QuicTransportParam_dup(const QuicTransportParam *tp, void *heap)
+{
+    QuicTransportParam *tp2;
+    tp2 = XMALLOC(sizeof(*tp2), heap, DYNAMIC_TYPE_TLSX);
+    if (!tp2) return NULL;
+    tp2->data = XMALLOC(tp->len, heap, DYNAMIC_TYPE_TLSX);
+    if (!tp2->data) {
+        XFREE(tp2, heap, DYNAMIC_TYPE_TLSX);
+        return NULL;
+    }
+    XMEMCPY((uint8_t*)tp2->data, tp->data, tp->len);
+    tp2->len = tp->len;
+    return tp;
+}
+
+void QuicTransportParam_free(const QuicTransportParam *tp, void *heap)
+{
+    (void)heap;
+    if (tp) {
+        if (tp->data) XFREE((uint8_t*)tp->data, heap, DYNAMIC_TYPE_TLSX);
+        XFREE((void*)tp, heap, DYNAMIC_TYPE_TLSX);
+    }
+}
+
+
 void wolfSSL_quic_clear(WOLFSSL* ssl)
 {
     QuicEncData *qd;
@@ -174,13 +216,13 @@ void wolfSSL_quic_clear(WOLFSSL* ssl)
      * - ssl->quic.transport_version
      * reset/free everything else
      */
-    if (ssl->quic.transport_params.peer) {
-        XFREE(ssl->quic.transport_params.peer, ssl->heap, DYNAMIC_TYPE_SSL);
-        ssl->quic.transport_params.peer = NULL;
+    if (ssl->quic.transport_peer) {
+        QuicTransportParam_free(ssl->quic.transport_peer, ssl->heap);
+        ssl->quic.transport_peer = NULL;
     }
-    if (ssl->quic.transport_params.peer_draft) {
-        XFREE(ssl->quic.transport_params.peer_draft, ssl->heap, DYNAMIC_TYPE_SSL);
-        ssl->quic.transport_params.peer_draft = NULL;
+    if (ssl->quic.transport_peer_draft) {
+        QuicTransportParam_free(ssl->quic.transport_peer_draft, ssl->heap);
+        ssl->quic.transport_peer_draft = NULL;
     }
     ssl->quic.enc_level_read = wolfssl_encryption_initial;
     ssl->quic.enc_level_write = wolfssl_encryption_initial;
@@ -202,9 +244,9 @@ void wolfSSL_quic_clear(WOLFSSL* ssl)
 void wolfSSL_quic_free(WOLFSSL* ssl)
 {
     wolfSSL_quic_clear(ssl);
-    if (ssl->quic.transport_params.our) {
-        XFREE(ssl->quic.transport_params.our, ssl->heap, DYNAMIC_TYPE_SSL);
-        ssl->quic.transport_params.our = NULL;
+    if (ssl->quic.transport_local) {
+        QuicTransportParam_free(ssl->quic.transport_local, ssl->heap);
+        ssl->quic.transport_local = NULL;
     }
 
     ssl->quic.method = NULL;
@@ -284,7 +326,7 @@ int wolfSSL_set_quic_transport_params(WOLFSSL *ssl,
                                       const uint8_t *params,
                                       size_t params_len)
 {
-    uint8_t *nparams;
+    const QuicTransportParam *tp;
     int ret = WOLFSSL_SUCCESS;
 
     WOLFSSL_ENTER("SSL_set_quic_transport_params");
@@ -295,21 +337,18 @@ int wolfSSL_set_quic_transport_params(WOLFSSL *ssl,
     }
 
     if (!params || params_len == 0) {
-        nparams = NULL;
-        params_len = 0;
+        tp = NULL;
     }
     else {
-        nparams = (uint8_t*) XMALLOC(params_len, ssl->heap, DYNAMIC_TYPE_SSL);
-        if (!nparams) {
+        tp = QuicTransportParam_new(params, params_len, ssl->heap);
+        if (!tp) {
             ret = WOLFSSL_FAILURE;
             goto cleanup;
         }
-        XMEMCPY(nparams, params, params_len);
     }
-    if (ssl->quic.transport_params.our)
-        XFREE(ssl->quic.transport_params.our, ssl->heap, DYNAMIC_TYPE_SSL);
-    ssl->quic.transport_params.our = nparams;
-    ssl->quic.transport_params.our_len = params_len;
+    if (ssl->quic.transport_local)
+        QuicTransportParam_free(ssl->quic.transport_local, ssl->heap);
+    ssl->quic.transport_local = tp;
 
 cleanup:
     WOLFSSL_LEAVE("SSL_set_quic_transport_params", ret);
@@ -321,13 +360,11 @@ void wolfSSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
                                             const uint8_t **out_params,
                                             size_t *out_params_len)
 {
-    if (ssl->quic.transport_params.peer_len) {
-        *out_params = ssl->quic.transport_params.peer;
-        *out_params_len = ssl->quic.transport_params.peer_len;
-    } else {
-        *out_params = ssl->quic.transport_params.peer_draft;
-        *out_params_len = ssl->quic.transport_params.peer_draft_len;
-    }
+    const QuicTransportParam *tp = ssl->quic.transport_peer?
+        ssl->quic.transport_peer : ssl->quic.transport_peer_draft;
+
+    *out_params = tp? tp->data : NULL;
+    *out_params_len = tp? tp->len : 0;
 }
 
 
@@ -365,8 +402,8 @@ size_t wolfSSL_quic_max_handshake_flight_len(const WOLFSSL *ssl,
 
 void wolfSSL_set_quic_use_legacy_codepoint(WOLFSSL *ssl, int use_legacy)
 {
-    ssl->quic.transport_version = use_legacy? WOLFSSL_TLSEXT_QUIC_TP_PARAMS_DRAFT
-        : WOLFSSL_TLSEXT_QUIC_TP_PARAMS;
+    ssl->quic.transport_version = use_legacy? TLSX_KEY_QUIC_TP_PARAMS_DRAFT
+        : TLSX_KEY_QUIC_TP_PARAMS;
 }
 
 void wolfSSL_set_quic_transport_version(WOLFSSL *ssl, int version)
@@ -849,6 +886,15 @@ int wolfSSL_quic_aead_encrypt(uint8_t *dest, WOLFSSL_EVP_CIPHER_CTX *ctx,
 {
     int len;
 
+    /* A case can be made if this really should be a function in wolfSSL, since
+     * the same should be doable from the API by a QUIC protocol stack.
+     * What speaks for this:
+     * - it gives us a decent testing point
+     * - API users do not have to re-invent (it fits into ngtcp2 use).
+     *   picotls offers a similar abstraction level for AEAD.
+     * - there is some fiddling in OpenSSL+quic in regard to CCM ciphers
+     *   which we do not seem/want to support (? not sure).
+     */
     if (wolfSSL_EVP_CipherInit(ctx, NULL, NULL, iv, 1) != WOLFSSL_SUCCESS
         || wolfSSL_EVP_CipherUpdate(ctx, NULL, &len, aad, (int)aadlen) != WOLFSSL_SUCCESS
         || wolfSSL_EVP_CipherUpdate(ctx, dest, &len, plain,
@@ -870,6 +916,7 @@ int wolfSSL_quic_aead_decrypt(uint8_t *dest, WOLFSSL_EVP_CIPHER_CTX *ctx,
     int len;
     const uint8_t *tag;
 
+    /* See rationale for wolfSSL_quic_aead_encrypt() on why this is here */
     if (enclen > INT_MAX || ctx->authTagSz > (int)enclen) {
         return WOLFSSL_FAILURE;
     }

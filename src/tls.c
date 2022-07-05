@@ -1218,8 +1218,8 @@ int TLS_hmac(WOLFSSL* ssl, byte* digest, const byte* in, word32 sz, int padSz,
  * from one peer to another.
  */
 
-/** Supports up to 64 flags. Increase as needed. */
-#define SEMAPHORE_SIZE 8
+/** Supports up to 72 flags. Increase as needed. */
+#define SEMAPHORE_SIZE 9
 
 /**
  * Converts the extension type (id) to an index in the semaphore.
@@ -1246,6 +1246,8 @@ static WC_INLINE word16 TLSX_ToSemaphore(word16 type)
 
         case TLSX_RENEGOTIATION_INFO: /* 0xFF01 */
             return 63;
+        case TLSX_KEY_QUIC_TP_PARAMS_DRAFT: /* 0xffa5 */
+            return 64;
 
         default:
             if (type > 62) {
@@ -10242,6 +10244,92 @@ int TLSX_EarlyData_Use(WOLFSSL* ssl, word32 maxSz)
 #endif
 
 /******************************************************************************/
+/* QUIC transport parameter extension                                         */
+/******************************************************************************/
+#ifdef WOLFSSL_QUIC
+
+static word16 TLSX_QuicTP_GetSize(TLSX* extension, int msgType)
+{
+    const QuicTransportParam *tp = extension->data;
+    (void)msgType;
+    if (tp && tp->len) {
+        return OPAQUE16_LEN + tp->len;
+    }
+    return 0;
+}
+
+static int TLSX_QuicTP_Use(WOLFSSL* ssl, int ext_type, int msgType)
+{
+    int   ret = 0;
+    TLSX* extension;
+
+    if (!ssl->quic.transport_local) {
+        /* Nothing set by the application */
+        return 0;
+    }
+
+    extension = TLSX_Find(ssl->extensions, ext_type);
+    if (extension == NULL) {
+        ret = TLSX_Push(&ssl->extensions, ext_type, NULL, ssl->heap);
+        if (ret != 0)
+            return ret;
+
+        extension = TLSX_Find(ssl->extensions, ext_type);
+        if (extension == NULL)
+            return MEMORY_E;
+    }
+    extension->resp = (msgType != client_hello);
+    extension->data = (void*)QuicTransportParam_dup(ssl->quic.transport_local, ssl->heap);
+    if (!extension->data) {
+        return MEMORY_E;
+    }
+
+    return 0;
+}
+
+static word16 TLSX_QuicTP_Write(const QuicTransportParam *tp, byte* output, byte msgType)
+{
+    word16 len = 0;
+
+    (void)msgType;
+    if (tp && tp->len) {
+        c16toa(tp->len, output);
+        len += OPAQUE16_LEN;
+        XMEMCPY(output + len, tp->data, tp->len);
+        len += tp->len;
+    }
+    return len;
+}
+
+static int TLSX_QuicTP_Parse(WOLFSSL *ssl, const byte *buffer, size_t len, int ext_type, int msgType)
+{
+    const QuicTransportParam *tp, **ptp;
+    word16 param_len;
+
+    (void)msgType;
+    if (!len || len < OPAQUE16_LEN) {
+        return BUFFER_ERROR;
+    }
+    ato16(buffer, &param_len);
+    if (param_len + OPAQUE16_LEN != len) {
+        return BUFFER_ERROR;
+    }
+    tp = QuicTransportParam_new(buffer + OPAQUE16_LEN, param_len, ssl->heap);
+    if (!tp) {
+        return MEMORY_E;
+    }
+    ptp = (ext_type == TLSX_KEY_QUIC_TP_PARAMS_DRAFT)?
+        &ssl->quic.transport_peer_draft : &ssl->quic.transport_peer;
+    if (*ptp) {
+        QuicTransportParam_free(*ptp, ssl->heap);
+    }
+    *ptp = tp;
+    return 0;
+}
+
+#endif /* WOLFSSL_QUIC */
+
+/******************************************************************************/
 /* TLS Extensions Framework                                                   */
 /******************************************************************************/
 
@@ -10382,6 +10470,14 @@ void TLSX_FreeAll(TLSX* list, void* heap)
                 SRTP_FREE((TlsxSrtp*)extension->data, heap);
                 break;
 #endif
+
+    #ifdef WOLFSSL_QUIC
+            case TLSX_KEY_QUIC_TP_PARAMS:
+                FALL_THROUGH;
+            case TLSX_KEY_QUIC_TP_PARAMS_DRAFT:
+                QuicTransportParam_free((QuicTransportParam*)extension->data, heap);
+                break;
+    #endif
 
             default:
                 break;
@@ -10538,6 +10634,14 @@ static int TLSX_GetSize(TLSX* list, byte* semaphore, byte msgType,
                 length += SRTP_GET_SIZE((TlsxSrtp*)extension->data);
                 break;
 #endif
+
+    #ifdef WOLFSSL_QUIC
+            case TLSX_KEY_QUIC_TP_PARAMS:
+                FALL_THROUGH; /* followed by */
+            case TLSX_KEY_QUIC_TP_PARAMS_DRAFT:
+                length += TLSX_QuicTP_GetSize(extension, msgType);
+                break;
+    #endif
             default:
                 break;
         }
@@ -10726,6 +10830,15 @@ static int TLSX_Write(TLSX* list, byte* output, byte* semaphore,
                 offset += SRTP_WRITE((TlsxSrtp*)extension->data, output+offset);
                 break;
 #endif
+    #ifdef WOLFSSL_QUIC
+            case TLSX_KEY_QUIC_TP_PARAMS:
+                FALL_THROUGH;
+            case TLSX_KEY_QUIC_TP_PARAMS_DRAFT:
+                WOLFSSL_MSG("quic transport parameter to write");
+                offset += TLSX_QuicTP_Write((const QuicTransportParam*)extension->data,
+                                            output + offset, msgType);
+                break;
+    #endif
             default:
                 break;
         }
@@ -11525,6 +11638,24 @@ int TLSX_WriteRequest(WOLFSSL* ssl, byte* output, byte msgType, word16* pOffset)
         #ifdef WOLFSSL_POST_HANDSHAKE_AUTH
             TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_POST_HANDSHAKE_AUTH));
         #endif
+        #if WOLFSSL_QUIC
+            if (IsAtLeastTLSv1_3(ssl->version) && WOLFSSL_IS_QUIC(ssl)) {
+                if (ssl->quic.transport_version == 0
+                    || ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS) {
+                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS));
+                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, msgType);
+                    if (ret != 0)
+                        return ret;
+                }
+                if (ssl->quic.transport_version == 0
+                    || ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS_DRAFT) {
+                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS_DRAFT));
+                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, msgType);
+                    if (ret != 0)
+                        return ret;
+                }
+            }
+        #endif
         }
     #endif
     #if defined(HAVE_SESSION_TICKET) || !defined(NO_PSK)
@@ -11809,6 +11940,27 @@ int TLSX_WriteResponse(WOLFSSL *ssl, byte* output, byte msgType, word16* pOffset
         #endif
         #if defined(HAVE_SERVER_RENEGOTIATION_INFO)
             TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_RENEGOTIATION_INFO));
+        #endif
+        #ifdef WOLFSSL_QUIC
+            if (IsAtLeastTLSv1_3(ssl->version) && WOLFSSL_IS_QUIC(ssl)) {
+                /* If version has not been restricted to DRAFT, we always
+                 * sent the V1 PARAMS */
+                if (ssl->quic.transport_version != TLSX_KEY_QUIC_TP_PARAMS_DRAFT) {
+                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS));
+                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, msgType);
+                    if (ret != 0)
+                        return ret;
+                }
+                /* If version is not restricted to V1 and peer sent DRAFT
+                 * params, we respond with DRAFT params (as well) */
+                if (ssl->quic.transport_version != TLSX_KEY_QUIC_TP_PARAMS
+                    && ssl->quic.transport_peer_draft) {
+                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS_DRAFT));
+                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, msgType);
+                    if (ret != 0)
+                        return ret;
+                }
+            }
         #endif
                 break;
 
@@ -12359,6 +12511,34 @@ int TLSX_Parse(WOLFSSL* ssl, const byte* input, word16 length, byte msgType,
                 ret = SRTP_PARSE(ssl, input + offset, size, isRequest);
                 break;
 #endif
+#ifdef WOLFSSL_QUIC
+            case TLSX_KEY_QUIC_TP_PARAMS:
+                FALL_THROUGH;
+            case TLSX_KEY_QUIC_TP_PARAMS_DRAFT:
+                WOLFSSL_MSG("QUIC transport parameter received");
+            #ifdef WOLFSSL_DEBUG_TLS
+                WOLFSSL_BUFFER(input + offset, size);
+            #endif
+
+                if (IsAtLeastTLSv1_3(ssl->version) &&
+                        msgType != client_hello &&
+                        msgType != server_hello &&
+                        msgType != encrypted_extensions) {
+                    return EXT_NOT_ALLOWED;
+                }
+                else if (!IsAtLeastTLSv1_3(ssl->version) &&
+                         msgType == encrypted_extensions) {
+                    return EXT_NOT_ALLOWED;
+                }
+                else if (WOLFSSL_IS_QUIC(ssl)) {
+                    ret = TLSX_QuicTP_Parse(ssl, input + offset, size, type, msgType);
+                }
+                else {
+                    WOLFSSL_MSG("QUIC transport param TLS extension type, but no QUIC");
+                    return EXT_NOT_ALLOWED; /* be safe, this should not happen */
+                }
+                break;
+#endif /* WOLFSSL_QUIC */
             default:
                 WOLFSSL_MSG("Unknown TLS extension type");
         }

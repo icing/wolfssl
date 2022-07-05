@@ -140,14 +140,13 @@ static int test_set_quic_method(void) {
         AssertTrue(data_len == 0);
         AssertTrue(wolfSSL_quic_read_level(ssl) == wolfssl_encryption_initial);
         AssertTrue(wolfSSL_quic_write_level(ssl) == wolfssl_encryption_initial);
-        /* TODO: Not sure, if the initial 0 is really what is expected */
         AssertTrue(wolfSSL_get_quic_transport_version(ssl) == 0);
-        wolfSSL_set_quic_transport_version(ssl, WOLFSSL_TLSEXT_QUIC_TP_PARAMS);
-        AssertTrue(wolfSSL_get_quic_transport_version(ssl) == WOLFSSL_TLSEXT_QUIC_TP_PARAMS);
+        wolfSSL_set_quic_transport_version(ssl, TLSX_KEY_QUIC_TP_PARAMS);
+        AssertTrue(wolfSSL_get_quic_transport_version(ssl) == TLSX_KEY_QUIC_TP_PARAMS);
         wolfSSL_set_quic_use_legacy_codepoint(ssl, 1);
-        AssertTrue(wolfSSL_get_quic_transport_version(ssl) == WOLFSSL_TLSEXT_QUIC_TP_PARAMS_DRAFT);
+        AssertTrue(wolfSSL_get_quic_transport_version(ssl) == TLSX_KEY_QUIC_TP_PARAMS_DRAFT);
         wolfSSL_set_quic_use_legacy_codepoint(ssl, 0);
-        AssertTrue(wolfSSL_get_quic_transport_version(ssl) == WOLFSSL_TLSEXT_QUIC_TP_PARAMS);
+        AssertTrue(wolfSSL_get_quic_transport_version(ssl) == TLSX_KEY_QUIC_TP_PARAMS);
         /* max flight len during stages of handhshake, we us 16k initial and on
          * app data, and during handshake allow larger for cert exchange. This is
          * more advisory for the network code. ngtcp2 has its own ideas, for example.

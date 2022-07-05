@@ -2358,8 +2358,14 @@ typedef enum {
     TLSX_SIGNATURE_ALGORITHMS_CERT  = 0x0032,
     #endif
     TLSX_KEY_SHARE                  = 0x0033,
+    #ifdef WOLFSSL_QUIC
+    TLSX_KEY_QUIC_TP_PARAMS         = 0x0039, /* RFC 9001, ch. 8.2 */
+    #endif
 #endif
-    TLSX_RENEGOTIATION_INFO         = 0xff01
+    TLSX_RENEGOTIATION_INFO         = 0xff01,
+#ifdef WOLFSSL_QUIC
+    TLSX_KEY_QUIC_TP_PARAMS_DRAFT   = 0xffa5, /* from draft-ietf-quic-tls-27 */
+#endif
 } TLSX_Type;
 
 typedef struct TLSX {
@@ -3433,6 +3439,17 @@ typedef struct QuicRecord {
     word32 end;
     WOLFSSL_ENCRYPTION_LEVEL level;
 } QuicEncData;
+
+typedef struct QuicTransportParam QuicTransportParam;
+struct QuicTransportParam {
+    const uint8_t *data;
+    word16 len;
+};
+
+WOLFSSL_LOCAL const QuicTransportParam *QuicTransportParam_new(const uint8_t *data, size_t len, void *heap);
+WOLFSSL_LOCAL const QuicTransportParam *QuicTransportParam_dup(const QuicTransportParam *tp, void *heap);
+WOLFSSL_LOCAL void QuicTransportParam_free(const QuicTransportParam *tp, void *heap);
+
 #endif /* WOLFSSL_QUIC */
 
 /* wolfSSL session type */
@@ -4876,14 +4893,9 @@ struct WOLFSSL {
         WOLFSSL_ENCRYPTION_LEVEL enc_level_write;
         WOLFSSL_ENCRYPTION_LEVEL enc_level_latest_recvd;
         int transport_version;
-        struct {
-            uint8_t *our;
-            size_t our_len;
-            uint8_t *peer_draft;
-            size_t peer_draft_len;
-            uint8_t *peer;
-            size_t peer_len;
-        } transport_params;
+        const QuicTransportParam *transport_local;
+        const QuicTransportParam *transport_peer;
+        const QuicTransportParam *transport_peer_draft;
         QuicRecord *input_head;          /* we own, data for handshake */
         QuicRecord *input_tail;          /* points to last element for append */
         QuicRecord *scratch;             /* we own, record construction */

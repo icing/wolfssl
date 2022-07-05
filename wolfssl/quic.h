@@ -102,9 +102,43 @@ WOLFSSL_API WOLFSSL_ENCRYPTION_LEVEL wolfSSL_quic_read_level(const WOLFSSL *ssl)
 WOLFSSL_API WOLFSSL_ENCRYPTION_LEVEL wolfSSL_quic_write_level(const WOLFSSL *ssl);
 
 
+/**
+ * Configure the QUIC transport version to use. On `use_legacy` != 0,
+ * selects TLSX_KEY_QUIC_TP_PARAMS_DRAFT, otherwise TLSX_KEY_QUIC_TP_PARAMS.
+ * This method is part of the BoringSSL API and replicated here for app
+ * portability (as in quictls/openssl).
+ */
+WOLFSSL_API void wolfSSL_set_quic_use_legacy_codepoint(WOLFSSL *ssl, int use_legacy);
+
+/**
+ * Set the TLS extension for the transport parameter version to announce
+ * to the peer. Known values are TLSX_KEY_QUIC_TP_PARAMS (V1) and
+ * TLSX_KEY_QUIC_TP_PARAMS_DRAFT.
+ * Setting it to 0 will announce both V1 and draft versions to a server.
+ * Servers will, on 0, select the latest version seen from the client.
+ * Default is 0.
+ */
+WOLFSSL_API void wolfSSL_set_quic_transport_version(WOLFSSL *ssl, int version);
+
+/**
+ * Get the configured transport version.
+ */
+WOLFSSL_API int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl);
+
+/**
+ * Set the raw QUIC transport parameter that will be sent in the TLS extension
+ * to the peer, using the configured transport version(s).
+ */
 WOLFSSL_API int wolfSSL_set_quic_transport_params(WOLFSSL *ssl,
                                                   const uint8_t *params,
                                                   size_t params_len);
+/**
+ * Get the raw QUIC transport parameter as retrieved via TLS Extension
+ * from the peer. If the peer announced several versions,
+ * return the latest one.
+ * If the extension has not arrived yet, initializes out parameter to
+ * NULL, resp. 0.
+ */
 WOLFSSL_API void wolfSSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
                                                         const uint8_t **out_params,
                                                         size_t *out_params_len);
@@ -120,16 +154,6 @@ WOLFSSL_API void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled);
  */
 WOLFSSL_API size_t wolfSSL_quic_max_handshake_flight_len(const WOLFSSL *ssl,
                                                          WOLFSSL_ENCRYPTION_LEVEL level);
-
-
-enum {
-    WOLFSSL_TLSEXT_QUIC_TP_PARAMS_DRAFT = 0xffa5,  /* value from draft-ietf-quic-tls-27 */
-    WOLFSSL_TLSEXT_QUIC_TP_PARAMS = 0x0039,        /* rfc9001, ch. 8.2 */
-};
-
-WOLFSSL_API void wolfSSL_set_quic_use_legacy_codepoint(WOLFSSL *ssl, int use_legacy);
-WOLFSSL_API void wolfSSL_set_quic_transport_version(WOLFSSL *ssl, int version);
-WOLFSSL_API int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl);
 
 
 /**
