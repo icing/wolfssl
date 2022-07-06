@@ -10248,56 +10248,61 @@ int TLSX_EarlyData_Use(WOLFSSL* ssl, word32 maxSz)
 /******************************************************************************/
 #ifdef WOLFSSL_QUIC
 
-static word16 TLSX_QuicTP_GetSize(TLSX* extension, int msgType)
+static word16 TLSX_QuicTP_GetSize(TLSX* extension)
 {
     const QuicTransportParam *tp = extension->data;
-    (void)msgType;
+
     if (tp && tp->len) {
-        return OPAQUE16_LEN + tp->len;
+        return tp->len;
     }
     return 0;
 }
 
-static int TLSX_QuicTP_Use(WOLFSSL* ssl, int ext_type, int msgType)
+int TLSX_QuicTP_Use(WOLFSSL* ssl, int ext_type, int is_response)
 {
-    int   ret = 0;
+    int ret = 0;
     TLSX* extension;
 
+    WOLFSSL_ENTER("TLSX_QuicTP_Use");
     if (!ssl->quic.transport_local) {
         /* Nothing set by the application */
-        return 0;
+        goto cleanup;
     }
 
     extension = TLSX_Find(ssl->extensions, ext_type);
     if (extension == NULL) {
         ret = TLSX_Push(&ssl->extensions, ext_type, NULL, ssl->heap);
         if (ret != 0)
-            return ret;
+            goto cleanup;
 
         extension = TLSX_Find(ssl->extensions, ext_type);
-        if (extension == NULL)
-            return MEMORY_E;
+        if (extension == NULL) {
+            ret = MEMORY_E;
+            goto cleanup;
+        }
     }
-    extension->resp = (msgType != client_hello);
+    extension->resp = is_response;
     extension->data = (void*)QuicTransportParam_dup(ssl->quic.transport_local, ssl->heap);
     if (!extension->data) {
-        return MEMORY_E;
+        ret = MEMORY_E;
+        goto cleanup;
     }
 
-    return 0;
+cleanup:
+    WOLFSSL_LEAVE("TLSX_QuicTP_Use", ret);
+    return ret;
 }
 
-static word16 TLSX_QuicTP_Write(const QuicTransportParam *tp, byte* output, byte msgType)
+static word16 TLSX_QuicTP_Write(QuicTransportParam *tp, byte* output)
 {
     word16 len = 0;
 
-    (void)msgType;
+    WOLFSSL_ENTER("TLSX_QuicTP_Write");
     if (tp && tp->len) {
-        c16toa(tp->len, output);
-        len += OPAQUE16_LEN;
-        XMEMCPY(output + len, tp->data, tp->len);
-        len += tp->len;
+        XMEMCPY(output, tp->data, tp->len);
+        len = tp->len;
     }
+    WOLFSSL_LEAVE("TLSX_QuicTP_Write", len);
     return len;
 }
 
@@ -10635,13 +10640,13 @@ static int TLSX_GetSize(TLSX* list, byte* semaphore, byte msgType,
                 break;
 #endif
 
-    #ifdef WOLFSSL_QUIC
+#ifdef WOLFSSL_QUIC
             case TLSX_KEY_QUIC_TP_PARAMS:
                 FALL_THROUGH; /* followed by */
             case TLSX_KEY_QUIC_TP_PARAMS_DRAFT:
-                length += TLSX_QuicTP_GetSize(extension, msgType);
+                length += TLSX_QuicTP_GetSize(extension);
                 break;
-    #endif
+#endif
             default:
                 break;
         }
@@ -10830,15 +10835,15 @@ static int TLSX_Write(TLSX* list, byte* output, byte* semaphore,
                 offset += SRTP_WRITE((TlsxSrtp*)extension->data, output+offset);
                 break;
 #endif
-    #ifdef WOLFSSL_QUIC
+#ifdef WOLFSSL_QUIC
             case TLSX_KEY_QUIC_TP_PARAMS:
                 FALL_THROUGH;
             case TLSX_KEY_QUIC_TP_PARAMS_DRAFT:
-                WOLFSSL_MSG("quic transport parameter to write");
-                offset += TLSX_QuicTP_Write((const QuicTransportParam*)extension->data,
-                                            output + offset, msgType);
+                WOLFSSL_MSG("QUIC transport parameter to write");
+                offset += TLSX_QuicTP_Write((QuicTransportParam*)extension->data,
+                                            output + offset);
                 break;
-    #endif
+#endif
             default:
                 break;
         }
@@ -11638,24 +11643,6 @@ int TLSX_WriteRequest(WOLFSSL* ssl, byte* output, byte msgType, word16* pOffset)
         #ifdef WOLFSSL_POST_HANDSHAKE_AUTH
             TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_POST_HANDSHAKE_AUTH));
         #endif
-        #if WOLFSSL_QUIC
-            if (IsAtLeastTLSv1_3(ssl->version) && WOLFSSL_IS_QUIC(ssl)) {
-                if (ssl->quic.transport_version == 0
-                    || ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS) {
-                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS));
-                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, msgType);
-                    if (ret != 0)
-                        return ret;
-                }
-                if (ssl->quic.transport_version == 0
-                    || ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS_DRAFT) {
-                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS_DRAFT));
-                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, msgType);
-                    if (ret != 0)
-                        return ret;
-                }
-            }
-        #endif
         }
     #endif
     #if defined(HAVE_SESSION_TICKET) || !defined(NO_PSK)
@@ -11940,27 +11927,6 @@ int TLSX_WriteResponse(WOLFSSL *ssl, byte* output, byte msgType, word16* pOffset
         #endif
         #if defined(HAVE_SERVER_RENEGOTIATION_INFO)
             TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_RENEGOTIATION_INFO));
-        #endif
-        #ifdef WOLFSSL_QUIC
-            if (IsAtLeastTLSv1_3(ssl->version) && WOLFSSL_IS_QUIC(ssl)) {
-                /* If version has not been restricted to DRAFT, we always
-                 * sent the V1 PARAMS */
-                if (ssl->quic.transport_version != TLSX_KEY_QUIC_TP_PARAMS_DRAFT) {
-                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS));
-                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, msgType);
-                    if (ret != 0)
-                        return ret;
-                }
-                /* If version is not restricted to V1 and peer sent DRAFT
-                 * params, we respond with DRAFT params (as well) */
-                if (ssl->quic.transport_version != TLSX_KEY_QUIC_TP_PARAMS
-                    && ssl->quic.transport_peer_draft) {
-                    TURN_ON(semaphore, TLSX_ToSemaphore(TLSX_KEY_QUIC_TP_PARAMS_DRAFT));
-                    ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, msgType);
-                    if (ret != 0)
-                        return ret;
-                }
-            }
         #endif
                 break;
 

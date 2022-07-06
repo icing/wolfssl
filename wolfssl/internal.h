@@ -3449,6 +3449,8 @@ struct QuicTransportParam {
 WOLFSSL_LOCAL const QuicTransportParam *QuicTransportParam_new(const uint8_t *data, size_t len, void *heap);
 WOLFSSL_LOCAL const QuicTransportParam *QuicTransportParam_dup(const QuicTransportParam *tp, void *heap);
 WOLFSSL_LOCAL void QuicTransportParam_free(const QuicTransportParam *tp, void *heap);
+WOLFSSL_LOCAL int TLSX_QuicTP_Use(WOLFSSL* ssl, int ext_type, int is_response);
+
 
 #endif /* WOLFSSL_QUIC */
 
@@ -4899,6 +4901,8 @@ struct WOLFSSL {
         QuicRecord *input_head;          /* we own, data for handshake */
         QuicRecord *input_tail;          /* points to last element for append */
         QuicRecord *scratch;             /* we own, record construction */
+        size_t output_rec_remain;        /* how many bytes of output TLS record
+                                          * content have not been handled yet by quic */
     } quic;
 #endif /* WOLFSSL_QUIC */
 };

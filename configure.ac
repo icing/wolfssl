@@ -4650,7 +4650,7 @@ then
     fi
     if test "x$ENABLED_TLS13" = "xyes"
     then
-        AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_QUIC"
+        AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_QUIC -DHAVE_EX_DATA"
     fi
     # Requires aesctr
     if test "x$ENABLED_AESCTR" = "xno"
