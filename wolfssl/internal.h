@@ -4899,6 +4899,8 @@ struct WOLFSSL {
         QuicRecord *input_head;          /* we own, data for handshake */
         QuicRecord *input_tail;          /* points to last element for append */
         QuicRecord *scratch;             /* we own, record construction */
+        size_t output_rec_remain;        /* how many bytes of output TLS record
+                                          * content have not been handled yet by quic */
     } quic;
 #endif /* WOLFSSL_QUIC */
 };

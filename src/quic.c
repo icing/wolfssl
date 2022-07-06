@@ -233,6 +233,7 @@ void wolfSSL_quic_clear(WOLFSSL* ssl)
         quic_record_free(ssl, qd);
     }
     ssl->quic.input_tail = NULL;
+    ssl->quic.output_rec_remain = 0;
 
     if (ssl->quic.scratch) {
         quic_record_free(ssl, ssl->quic.scratch);
@@ -422,16 +423,22 @@ int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl)
 void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled)
 {
     /* This only has effect on server and when the handshake has
-     * not started yet. For clients, we have no internal options
-     * state that would make wolfSSL_write_early_data() fail inspite
-     * the server supporting it.
-     * So we silently ignore all these cases. The use case for this
-     * function seems to be designed for servers.
+     * not started yet.
+     * This function is part of the quictls/openssl API and does
+     * not return any error, sadly. So we just ignore any
+     * unsuccessfull use. But we can produce some warnings.
      */
-    if (wolfSSL_is_quic(ssl)
-        && ssl->options.handShakeState == NULL_STATE
-        && ssl->options.side == WOLFSSL_SERVER_END) {
-        ssl->options.maxEarlyDataSz = enabled? MAX_EARLY_DATA_SZ : 0;
+    if (!wolfSSL_IS_QUIC(ssl)) {
+        WOLFSSL_MSG("wolfSSL_set_quic_early_data_enabled: not a QUIC SSL");
+    }
+    else if (ssl->options.handShakeState != NULL_STATE) {
+        WOLFSSL_MSG("wolfSSL_set_quic_early_data_enabled: handshake already started");
+    }
+    else if (ssl->options.side == WOLFSSL_CLIENT_END) {
+        WOLFSSL_MSG("wolfSSL_set_quic_early_data_enabled: on client side");
+    }
+    else {
+        wolfSSL_set_max_early_data(ssl, enabled? MAX_EARLY_DATA_SZ : 0);
     }
 }
 #endif /* WOLFSSL_EARLY_DATA */
@@ -565,26 +572,67 @@ cleanup:
     return transferred;
 }
 
-
+/**
+ * We need to forward the HANDSHAKE messages to the QUIC protocol stack
+ * via ssl->quic.method->add_handshake_data().
+ * This expects messages in the TLSv1.3 handshake sub-protocol, *not* the
+ * TLS record layer.
+ * wolfSSL has no intermediate subprotocl record compilation and sending
+ * it to a TLS record layer wrapping function. Instead, it directly assembles
+ * TLS records in the `outputBuffer`. Which means we have to find the
+ * sub-protocol (e.g. handshake protocol) content again in the output buffer
+ * and only forward that.
+ * Although wolfSSL does *seem* to only have complete TLS records in its
+ * output buffer, we track remaining data in ssl->quic.output_rec_remain
+ * and can handle partial writes.
+ *
+ * Caveat: QUIC protocol handlers *might* be used to only get complete
+ * handshake records passed in `add_handshake_data()`, where this implementation
+ * would pass fragments should the length exceed the max TLS record size.
+ * This would probably only apply to very large Certificates sent, though.
+ */
 int wolfSSL_quic_send(WOLFSSL* ssl)
 {
     int ret = 0;
+    size_t len;
+    RecordLayerHeader* rl;
+    word16 rlen;
 
     WOLFSSL_ENTER("wolfSSL_quic_send");
-    if (ssl->buffers.outputBuffer.length > 0) {
-        /* TODO: Are we in handshake? */
-        ret = ssl->quic.method->add_handshake_data(
-            ssl, ssl->quic.enc_level_write,
-            (const uint8_t*)ssl->buffers.outputBuffer.buffer +
-                ssl->buffers.outputBuffer.idx,
-            ssl->buffers.outputBuffer.length);
-        if (!ret) {
-            /* The application has an error. General desaster. */
-            WOLFSSL_MSG("WOLFSSL_QUIC_SEND application returned error");
-            ret = -1;
-            goto cleanup;
+
+    while (ssl->buffers.outputBuffer.length > 0) {
+        if (ssl->quic.output_rec_remain > 0) {
+            len = ssl->quic.output_rec_remain;
+            if (len > ssl->buffers.outputBuffer.length) {
+                len = ssl->buffers.outputBuffer.length;
+            }
+
+            ret = ssl->quic.method->add_handshake_data(
+                ssl, ssl->quic.enc_level_write,
+                (const uint8_t*)ssl->buffers.outputBuffer.buffer +
+                    ssl->buffers.outputBuffer.idx, len);
+            if (!ret) {
+                /* The application has an error. General desaster. */
+                WOLFSSL_MSG("WOLFSSL_QUIC_SEND application returned error");
+                ret = -1;
+                goto cleanup;
+            }
+            ssl->buffers.outputBuffer.idx += len;
+            ssl->buffers.outputBuffer.length -= len;
+            ssl->quic.output_rec_remain -= len;
+        }
+        else {
+            /* at start of a TLS Record */
+            rl = (RecordLayerHeader*)ssl->buffers.outputBuffer.buffer +
+                        ssl->buffers.outputBuffer.idx;
+            ato16(rl->length, &rlen);
+            /* TODO: do want to check that rl->type really is about handshake? */
+            ssl->buffers.outputBuffer.idx += RECORD_HEADER_SZ;
+            ssl->buffers.outputBuffer.length -= RECORD_HEADER_SZ;
+            ssl->quic.output_rec_remain = rlen;
         }
     }
+
 cleanup:
     WOLFSSL_LEAVE("wolfSSL_quic_send", ret);
     return ret;
