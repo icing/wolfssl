@@ -181,7 +181,6 @@ static int test_set_quic_method(void) {
         AssertNotNull(ssl = wolfSSL_new(ctx));
         AssertFalse(wolfSSL_set_quic_method(ssl, &dummy_method) == WOLFSSL_SUCCESS);
         AssertFalse(wolfSSL_is_quic(ssl));
-        AssertFalse(wolfSSL_set_quic_transport_params(ssl, NULL, 0) == WOLFSSL_SUCCESS);
         /* even though not quic, this is the only level we can return */
         AssertTrue(wolfSSL_quic_read_level(ssl) == wolfssl_encryption_initial);
         AssertTrue(wolfSSL_quic_write_level(ssl) == wolfssl_encryption_initial);
@@ -583,10 +582,9 @@ static int test_quic_client(void) {
     wolfSSL_set_app_data(ssl, &tctx);
     AssertTrue(wolfSSL_connect(ssl) != 0);
     err = wolfSSL_get_error(ssl, 0);
-    AssertTrue(SSL_ERROR_WANT_READ == err);
-    /* Since we have not set any QUIC transport params, they should not be
-     * in the client hello extensions */
-    check_quic_client_hello(tctx.output, tctx.output_len, 0, 0, 0);
+    /* Since we have not set any QUIC transport params, and they are
+     * mandatory, this needs to fail */
+    AssertTrue(QUIC_TP_MISSING_E == err);
     wolfSSL_free(ssl);
     printf(": %s\n", (ret == 0)? passed : failed);
 

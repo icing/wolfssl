@@ -3450,6 +3450,7 @@ WOLFSSL_LOCAL const QuicTransportParam *QuicTransportParam_new(const uint8_t *da
 WOLFSSL_LOCAL const QuicTransportParam *QuicTransportParam_dup(const QuicTransportParam *tp, void *heap);
 WOLFSSL_LOCAL void QuicTransportParam_free(const QuicTransportParam *tp, void *heap);
 WOLFSSL_LOCAL int TLSX_QuicTP_Use(WOLFSSL* ssl, int ext_type, int is_response);
+WOLFSSL_LOCAL int wolfSSL_quic_add_transport_extensions(WOLFSSL *ssl, int msg_type);
 
 
 #endif /* WOLFSSL_QUIC */

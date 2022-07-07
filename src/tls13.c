@@ -3427,18 +3427,9 @@ int SendTls13ClientHello(WOLFSSL* ssl)
 #endif
 #ifdef WOLFSSL_QUIC
     if (WOLFSSL_IS_QUIC(ssl) && IsAtLeastTLSv1_3(ssl->version)) {
-        if (ssl->quic.transport_version == 0
-            || ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS) {
-            ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, 0);
-            if (ret != 0)
-                return ret;
-        }
-        if (ssl->quic.transport_version == 0
-            || ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS_DRAFT) {
-            ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, 0);
-            if (ret != 0)
-                return ret;
-        }
+        ret = wolfSSL_quic_add_transport_extensions(ssl, client_hello);
+        if (ret != 0)
+            return ret;
     }
 #endif
     /* Include length of TLS extensions. */
@@ -5654,21 +5645,9 @@ static int SendTls13EncryptedExtensions(WOLFSSL* ssl)
 #endif
 #ifdef WOLFSSL_QUIC
     if (IsAtLeastTLSv1_3(ssl->version) && WOLFSSL_IS_QUIC(ssl)) {
-        /* If version has not been restricted to DRAFT, we always
-         * sent the V1 PARAMS */
-        if (ssl->quic.transport_version != TLSX_KEY_QUIC_TP_PARAMS_DRAFT) {
-            ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, 1);
-            if (ret != 0)
-                return ret;
-        }
-        /* If version is not restricted to V1 and peer sent DRAFT
-         * params, we respond with DRAFT params (as well) */
-        if (ssl->quic.transport_version != TLSX_KEY_QUIC_TP_PARAMS
-            && ssl->quic.transport_peer_draft) {
-            ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, 1);
-            if (ret != 0)
-                return ret;
-        }
+        ret = wolfSSL_quic_add_transport_extensions(ssl, encrypted_extensions);
+        if (ret != 0)
+            return ret;
     }
 #endif
 

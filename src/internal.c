@@ -22127,6 +22127,11 @@ const char* wolfSSL_ERR_reason_error_string(unsigned long e)
     case FALCON_KEY_SIZE_E:
         return "Wrong key size for Falcon.";
 
+#ifdef WOLFSSL_QUIC
+    case QUIC_TP_MISSING_E:
+        return "QUIC transport parameter not set";
+#endif
+
     default :
         return "unknown error number";
     }

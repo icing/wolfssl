@@ -10252,10 +10252,7 @@ static word16 TLSX_QuicTP_GetSize(TLSX* extension)
 {
     const QuicTransportParam *tp = extension->data;
 
-    if (tp && tp->len) {
-        return tp->len;
-    }
-    return 0;
+    return tp? tp->len : 0;
 }
 
 int TLSX_QuicTP_Use(WOLFSSL* ssl, int ext_type, int is_response)
@@ -10264,8 +10261,12 @@ int TLSX_QuicTP_Use(WOLFSSL* ssl, int ext_type, int is_response)
     TLSX* extension;
 
     WOLFSSL_ENTER("TLSX_QuicTP_Use");
-    if (!ssl->quic.transport_local) {
-        /* Nothing set by the application */
+    if (ssl->quic.transport_local == NULL) {
+        /* RFC9000, ch 7.3: "An endpoint MUST treat the absence of [...]
+         *     from either endpoint [...] as a connection error of type
+         *     TRANSPORT_PARAMETER_ERROR."
+         */
+        ret = QUIC_TP_MISSING_E;
         goto cleanup;
     }
 

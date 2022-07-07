@@ -211,7 +211,7 @@ void wolfSSL_quic_clear(WOLFSSL* ssl)
     QuicEncData *qd;
 
     /* keep
-     * - ssl->quic.transport_params.our
+     * - ssl->quic.transport_local
      * - ssl->quic.method
      * - ssl->quic.transport_version
      * reset/free everything else
@@ -332,11 +332,6 @@ int wolfSSL_set_quic_transport_params(WOLFSSL *ssl,
 
     WOLFSSL_ENTER("SSL_set_quic_transport_params");
 
-    if (!wolfSSL_is_quic(ssl)) {
-        ret = WOLFSSL_FAILURE;
-        goto cleanup;
-    }
-
     if (!params || params_len == 0) {
         tp = NULL;
     }
@@ -369,6 +364,57 @@ void wolfSSL_get_peer_quic_transport_params(const WOLFSSL *ssl,
 }
 
 
+void wolfSSL_set_quic_use_legacy_codepoint(WOLFSSL *ssl, int use_legacy)
+{
+    ssl->quic.transport_version = use_legacy? TLSX_KEY_QUIC_TP_PARAMS_DRAFT
+        : TLSX_KEY_QUIC_TP_PARAMS;
+}
+
+void wolfSSL_set_quic_transport_version(WOLFSSL *ssl, int version)
+{
+    if (version == TLSX_KEY_QUIC_TP_PARAMS
+        || version == TLSX_KEY_QUIC_TP_PARAMS_DRAFT
+        || !version) {
+        ssl->quic.transport_version = version;
+    }
+    else {
+        WOLFSSL_MSG("wolfSSL_set_quic_transport_version: invalid version, ignored");
+    }
+}
+
+
+int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl)
+{
+    return ssl->quic.transport_version;
+}
+
+
+int wolfSSL_quic_add_transport_extensions(WOLFSSL *ssl, int msg_type)
+{
+    /* RFC 9001, ch. 8.2: "The quic_transport_parameters extension is carried
+     *    in the ClientHello and the EncryptedExtensions messages during the
+     *    handshake. Endpoints MUST send the quic_transport_parameters extension;"
+     * Which means, at least one. There can be more to signal compatibility to
+     * older/newer versions.
+     */
+    int ret = 0, is_resp = (msg_type == encrypted_extensions);
+
+    if (ssl->quic.transport_local == NULL) {
+        return QUIC_TP_MISSING_E;
+    }
+    else if (ssl->quic.transport_version == 0) {
+        /* not being set to a particular id, we send both draft+v1 */
+        ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, is_resp)
+            || TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, is_resp);
+    }
+    else {
+        /* otherwise, send the version configured */
+        ret = TLSX_QuicTP_Use(ssl, ssl->quic.transport_version, is_resp);
+    }
+    return ret;
+}
+
+
 #define QUIC_HS_FLIGHT_LIMIT_DEFAULT      (16 * 1024)
 
 size_t wolfSSL_quic_max_handshake_flight_len(const WOLFSSL *ssl,
@@ -398,24 +444,6 @@ size_t wolfSSL_quic_max_handshake_flight_len(const WOLFSSL *ssl,
             return QUIC_HS_FLIGHT_LIMIT_DEFAULT;
     }
     return 0;
-}
-
-
-void wolfSSL_set_quic_use_legacy_codepoint(WOLFSSL *ssl, int use_legacy)
-{
-    ssl->quic.transport_version = use_legacy? TLSX_KEY_QUIC_TP_PARAMS_DRAFT
-        : TLSX_KEY_QUIC_TP_PARAMS;
-}
-
-void wolfSSL_set_quic_transport_version(WOLFSSL *ssl, int version)
-{
-    ssl->quic.transport_version = version;
-}
-
-
-int wolfSSL_get_quic_transport_version(const WOLFSSL *ssl)
-{
-    return ssl->quic.transport_version;
 }
 
 
