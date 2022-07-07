@@ -3438,6 +3438,7 @@ typedef struct QuicRecord {
     word32 start;
     word32 end;
     WOLFSSL_ENCRYPTION_LEVEL level;
+    word32 rec_hdr_remain;
 } QuicEncData;
 
 typedef struct QuicTransportParam QuicTransportParam;
@@ -4893,8 +4894,8 @@ struct WOLFSSL {
     struct {
         const WOLFSSL_QUIC_METHOD *method;
         WOLFSSL_ENCRYPTION_LEVEL enc_level_read;
-        WOLFSSL_ENCRYPTION_LEVEL enc_level_write;
         WOLFSSL_ENCRYPTION_LEVEL enc_level_latest_recvd;
+        WOLFSSL_ENCRYPTION_LEVEL enc_level_write;
         int transport_version;
         const QuicTransportParam *transport_local;
         const QuicTransportParam *transport_peer;

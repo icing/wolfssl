@@ -10310,17 +10310,9 @@ static word16 TLSX_QuicTP_Write(QuicTransportParam *tp, byte* output)
 static int TLSX_QuicTP_Parse(WOLFSSL *ssl, const byte *buffer, size_t len, int ext_type, int msgType)
 {
     const QuicTransportParam *tp, **ptp;
-    word16 param_len;
 
     (void)msgType;
-    if (!len || len < OPAQUE16_LEN) {
-        return BUFFER_ERROR;
-    }
-    ato16(buffer, &param_len);
-    if (param_len + OPAQUE16_LEN != len) {
-        return BUFFER_ERROR;
-    }
-    tp = QuicTransportParam_new(buffer + OPAQUE16_LEN, param_len, ssl->heap);
+    tp = QuicTransportParam_new(buffer + OPAQUE16_LEN, len, ssl->heap);
     if (!tp) {
         return MEMORY_E;
     }

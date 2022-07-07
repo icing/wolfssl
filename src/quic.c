@@ -151,16 +151,50 @@ cleanup:
 }
 
 
+static word32 add_rec_header(byte* output, word32 length, int type)
+{
+    RecordLayerHeader* rl;
+
+    /* record layer header */
+    rl = (RecordLayerHeader*)output;
+    if (rl == NULL) {
+        return 0;
+    }
+    rl->type    = type;
+    rl->pvMajor = SSLv3_MAJOR;
+    rl->pvMinor = TLSv1_2_MINOR;
+    c16toa((word16)length, rl->length);
+    return RECORD_HEADER_SZ;
+}
+
 static word32 quic_record_transfer(QuicRecord *qr, byte *buf, word32 sz)
 {
-    word32 len = min(qr->end - qr->start, sz);
+    word32 len = qr->end - qr->start;
+    word32 offset = 0;
+    word16 rlen;
 
     if (len <= 0) {
         return 0;
     }
-    XMEMCPY(buf, qr->data + qr->start, len);
-    qr->start += len;
-    return len;
+    if (qr->rec_hdr_remain == 0) {
+        /* start a new TLS record */
+        rlen = (qr->len <= MAX_RECORD_SIZE)? qr->len : MAX_RECORD_SIZE;
+        offset += add_rec_header(buf, rlen, handshake);
+        qr->rec_hdr_remain = rlen;
+        sz -= offset;
+    }
+    if (len > qr->rec_hdr_remain) {
+        len = qr->rec_hdr_remain;
+    }
+    if (len > sz) {
+        len = sz;
+    }
+    if (len > 0) {
+        XMEMCPY(buf + offset, qr->data + qr->start, len);
+        qr->start += len;
+        qr->rec_hdr_remain -= len;
+    }
+    return len + offset;
 }
 
 
@@ -559,6 +593,8 @@ int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
         }
     }
 
+    ssl->quic.enc_level_latest_recvd = level;
+
 cleanup:
     WOLFSSL_LEAVE("wolfSSL_provide_quic_data", ret);
     return ret;
@@ -589,7 +625,8 @@ int wolfSSL_quic_receive(WOLFSSL* ssl, byte* buf, word32 sz)
             if (transferred > 0) {
                 goto cleanup;
             }
-            return WANT_READ;
+            transferred = WANT_READ;
+            goto cleanup;
         }
         sz -= n;
         buf += n;
@@ -621,7 +658,7 @@ cleanup:
  */
 int wolfSSL_quic_send(WOLFSSL* ssl)
 {
-    int ret = 0;
+    int ret = 0, aret;
     size_t len;
     RecordLayerHeader* rl;
     word16 rlen;
@@ -635,14 +672,14 @@ int wolfSSL_quic_send(WOLFSSL* ssl)
                 len = ssl->buffers.outputBuffer.length;
             }
 
-            ret = !ssl->quic.method->add_handshake_data(
+            aret = ssl->quic.method->add_handshake_data(
                 ssl, ssl->quic.enc_level_write,
                 (const uint8_t*)ssl->buffers.outputBuffer.buffer +
                     ssl->buffers.outputBuffer.idx, len);
-            if (ret) {
+            if (aret != 1) {
                 /* The application has an error. General desaster. */
-                WOLFSSL_MSG("WOLFSSL_QUIC_SEND application returned error");
-                ret = -1;
+                WOLFSSL_MSG("WOLFSSL_QUIC_SEND application failed");
+                ret = FWRITE_ERROR;
                 goto cleanup;
             }
             ssl->buffers.outputBuffer.idx += len;
@@ -654,12 +691,14 @@ int wolfSSL_quic_send(WOLFSSL* ssl)
             rl = (RecordLayerHeader*)ssl->buffers.outputBuffer.buffer +
                         ssl->buffers.outputBuffer.idx;
             ato16(rl->length, &rlen);
-            /* TODO: do want to check that rl->type really is about handshake? */
+            /* TODO: check that rl->type really is about handshake? */
             ssl->buffers.outputBuffer.idx += RECORD_HEADER_SZ;
             ssl->buffers.outputBuffer.length -= RECORD_HEADER_SZ;
             ssl->quic.output_rec_remain = rlen;
         }
     }
+
+    ssl->buffers.outputBuffer.idx = 0;
 
 cleanup:
     WOLFSSL_LEAVE("wolfSSL_quic_send", ret);
