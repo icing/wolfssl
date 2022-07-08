@@ -531,7 +531,11 @@ static WC_INLINE int IsEncryptionOn(WOLFSSL* ssl, int isSend)
 
     }
     #endif /* WOLFSSL_DTLS */
-
+    #ifdef WOLFSSL_QUIC
+        if (WOLFSSL_IS_QUIC(ssl) && IsAtLeastTLSv1_3(ssl->version)) {
+            return 0;
+        }
+    #endif
     return ssl->keys.encryptionOn &&
         (isSend ? ssl->encrypt.setup : ssl->decrypt.setup);
 }

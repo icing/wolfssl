@@ -640,21 +640,8 @@ cleanup:
 /**
  * We need to forward the HANDSHAKE messages to the QUIC protocol stack
  * via ssl->quic.method->add_handshake_data().
- * This expects messages in the TLSv1.3 handshake sub-protocol, *not* the
- * TLS record layer.
- * wolfSSL has no intermediate subprotocl record compilation and sending
- * it to a TLS record layer wrapping function. Instead, it directly assembles
- * TLS records in the `outputBuffer`. Which means we have to find the
- * sub-protocol (e.g. handshake protocol) content again in the output buffer
- * and only forward that.
- * Although wolfSSL does *seem* to only have complete TLS records in its
- * output buffer, we track remaining data in ssl->quic.output_rec_remain
- * and can handle partial writes.
- *
- * Caveat: QUIC protocol handlers *might* be used to only get complete
- * handshake records passed in `add_handshake_data()`, where this implementation
- * would pass fragments should the length exceed the max TLS record size.
- * This would probably only apply to very large Certificates sent, though.
+ * The messages in the output buffer are unencrypted TLS records. We need
+ * to forward the content of those records.
  */
 int wolfSSL_quic_send(WOLFSSL* ssl)
 {
@@ -1007,8 +994,8 @@ int wolfSSL_quic_aead_encrypt(uint8_t *dest, WOLFSSL_EVP_CIPHER_CTX *ctx,
      * - it gives us a decent testing point
      * - API users do not have to re-invent (it fits into ngtcp2 use).
      *   picotls offers a similar abstraction level for AEAD.
-     * - there is some fiddling in OpenSSL+quic in regard to CCM ciphers
-     *   which we do not seem/want to support (? not sure).
+     * TODO: there is some fiddling in OpenSSL+quic in regard to CCM ciphers
+     *       which we need to check.
      */
     if (wolfSSL_EVP_CipherInit(ctx, NULL, NULL, iv, 1) != WOLFSSL_SUCCESS
         || wolfSSL_EVP_CipherUpdate(ctx, NULL, &len, aad, (int)aadlen) != WOLFSSL_SUCCESS

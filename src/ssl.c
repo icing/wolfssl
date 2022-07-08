@@ -2301,6 +2301,12 @@ int wolfSSL_write(WOLFSSL* ssl, const void* data, int sz)
     if (ssl == NULL || data == NULL || sz < 0)
         return BAD_FUNC_ARG;
 
+#ifdef WOLFSSL_QUIC
+    if (WOLFSSL_IS_QUIC(ssl)) {
+        WOLFSSL_MSG("SSL_write() on QUIC not allowed");
+        return BAD_FUNC_ARG;
+    }
+#endif
 #ifdef WOLFSSL_EARLY_DATA
     if (ssl->earlyData != no_early_data && (ret = wolfSSL_negotiate(ssl)) < 0) {
         ssl->error = ret;
@@ -2368,6 +2374,12 @@ static int wolfSSL_read_internal(WOLFSSL* ssl, void* data, int sz, int peek)
     if (ssl == NULL || data == NULL || sz < 0)
         return BAD_FUNC_ARG;
 
+#ifdef WOLFSSL_QUIC
+    if (WOLFSSL_IS_QUIC(ssl)) {
+        WOLFSSL_MSG("SSL_read() on QUIC not allowed");
+        return BAD_FUNC_ARG;
+    }
+#endif
 #if defined(WOLFSSL_ERROR_CODE_OPENSSL) && defined(OPENSSL_EXTRA)
     /* This additional logic is meant to simulate following openSSL behavior:
      * After bidirectional SSL_shutdown complete, SSL_read returns 0 and

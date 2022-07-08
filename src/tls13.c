@@ -2625,6 +2625,16 @@ int BuildTls13Message(WOLFSSL* ssl, byte* output, int outSz, const byte* input,
 
         case BUILD_MSG_ENCRYPT:
         {
+#ifdef WOLFSSL_QUIC
+            if (WOLFSSL_IS_QUIC(ssl)) {
+                /* QUIC does not use encryption of the TLS Record Layer.
+                 * Return the original length + added headers
+                 * and restore it in the record header. */
+                AddTls13RecordHeader(output, inSz, application_data, ssl);
+                ret = args->headerSz + inSz;
+                goto exit_buildmsg;
+            }
+#endif
         #ifdef ATOMIC_USER
             if (ssl->ctx->MacEncryptCb) {
                 /* User Record Layer Callback handling */
