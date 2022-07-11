@@ -475,7 +475,163 @@ WOLFSSL_METHOD *wolfDTLSv1_client_method(void);
     \sa wolfSSL_CTX_new
 */
 WOLFSSL_METHOD *wolfDTLSv1_server_method(void);
+/*!
+    \ingroup Setup
 
+    \brief The wolfDTLSv1_3_server_method() function is used to indicate that
+    the application is a server and will only support the DTLS 1.3
+    protocol. This function allocates memory for and initializes a new
+    wolfSSL_METHOD structure to be used when creating the SSL/TLS context with
+    wolfSSL_CTX_new(). This function is only available when wolfSSL has been
+    compiled with DTLSv1.3 support (--enable-dtls13, or by defining
+    wolfSSL_DTLS13).
+
+    \return * If successful, the call will return a pointer to the newly
+    created WOLFSSL_METHOD structure.
+    \return FAIL If memory allocation fails when calling XMALLOC, the failure
+    value of the underlying malloc() implementation will be returned
+    (typically NULL with errno will be set to ENOMEM).
+
+    \param none No parameters.
+
+    _Example_
+    \code
+    WOLFSSL_METHOD* method;
+    WOLFSSL_CTX* ctx;
+
+    method = wolfDTLSv1_3_server_method();
+    if (method == NULL) {
+	    // unable to get method
+    }
+
+    ctx = wolfSSL_CTX_new(method);
+    ...
+    \endcode
+
+
+    \sa wolfDTLSv1_3_client_method
+*/
+
+WOLFSSL_METHOD *wolfDTLSv1_3_server_method(void);
+/*!
+    \ingroup Setup
+
+    \brief The wolfDTLSv1_3_client_method() function is used to indicate that
+    the application is a client and will only support the DTLS 1.3
+    protocol. This function allocates memory for and initializes a new
+    wolfSSL_METHOD structure to be used when creating the SSL/TLS context with
+    wolfSSL_CTX_new(). This function is only available when wolfSSL has been
+    compiled with DTLSv1.3 support (--enable-dtls13, or by defining
+    wolfSSL_DTLS13).
+
+    \return * If successful, the call will return a pointer to the newly
+    created WOLFSSL_METHOD structure.
+    \return FAIL If memory allocation fails when calling XMALLOC, the failure
+    value of the underlying malloc() implementation will be returned
+    (typically NULL with errno will be set to ENOMEM).
+
+    \param none No parameters.
+
+    _Example_
+    \code
+    WOLFSSL_METHOD* method;
+    WOLFSSL_CTX* ctx;
+
+    method = wolfDTLSv1_3_client_method();
+    if (method == NULL) {
+	    // unable to get method
+    }
+
+    ctx = wolfSSL_CTX_new(method);
+    ...
+    \endcode
+
+
+    \sa wolfDTLSv1_3_server_method
+*/
+WOLFSSL_METHOD* wolfDTLSv1_3_client_method(void);
+/*!
+    \ingroup Setup
+
+    \brief The wolfDTLS_server_method() function is used to indicate that the
+    application is a server and will support the highest version of DTLS
+    available and all the version up to the minimum version allowed.  The
+    default minimum version allowed is based on the define
+    WOLFSSL_MIN_DTLS_DOWNGRADE and can be changed at runtime using
+    wolfSSL_SetMinVersion(). This function allocates memory for and initializes
+    a new wolfSSL_METHOD structure to be used when creating the SSL/TLS context
+    with wolfSSL_CTX_new(). This function is only available when wolfSSL has
+    been compiled with DTLS support (--enable-dtls, or by defining
+    wolfSSL_DTLS).
+
+    \return * If successful, the call will return a pointer to the newly
+    created WOLFSSL_METHOD structure.
+    \return FAIL If memory allocation fails when calling XMALLOC, the failure
+    value of the underlying malloc() implementation will be returned
+    (typically NULL with errno will be set to ENOMEM).
+
+    \param none No parameters.
+
+    _Example_
+    \code
+    WOLFSSL_METHOD* method;
+    WOLFSSL_CTX* ctx;
+
+    method = wolfDTLS_server_method();
+    if (method == NULL) {
+	    // unable to get method
+    }
+
+    ctx = wolfSSL_CTX_new(method);
+    ...
+    \endcode
+
+
+    \sa wolfDTLS_client_method
+    \sa wolfSSL_SetMinVersion
+*/
+WOLFSSL_METHOD *wolfDTLS_server_method(void);
+/*!
+    \ingroup Setup
+
+    \brief The wolfDTLS_client_method() function is used to indicate that the
+    application is a client and will support the highest version of DTLS
+    available and all the version up to the minimum version allowed.  The
+    default minimum version allowed is based on the define
+    WOLFSSL_MIN_DTLS_DOWNGRADE and can be changed at runtime using
+    wolfSSL_SetMinVersion(). This function allocates memory for and initializes
+    a new wolfSSL_METHOD structure to be used when creating the SSL/TLS context
+    with wolfSSL_CTX_new(). This function is only available when wolfSSL has
+    been compiled with DTLS support (--enable-dtls, or by defining
+    wolfSSL_DTLS).
+
+    \return * If successful, the call will return a pointer to the newly
+    created WOLFSSL_METHOD structure.
+    \return FAIL If memory allocation fails when calling XMALLOC, the failure
+    value of the underlying malloc() implementation will be returned
+    (typically NULL with errno will be set to ENOMEM).
+
+    \param none No parameters.
+
+    _Example_
+    \code
+    WOLFSSL_METHOD* method;
+    WOLFSSL_CTX* ctx;
+
+    method = wolfDTLS_client_method();
+    if (method == NULL) {
+	    // unable to get method
+    }
+
+    ctx = wolfSSL_CTX_new(method);
+    ...
+    \endcode
+
+
+    \sa wolfDTLS_server_method
+    \sa wolfSSL_SetMinVersion
+*/
+WOLFSSL_METHOD *wolfDTLS_client_method(void);
 /*!
     \brief This function creates and initializes a WOLFSSL_METHOD for the
     server side.
@@ -1595,7 +1751,87 @@ WOLFSSL* wolfSSL_new(WOLFSSL_CTX*);
     \sa wolfSSL_SetIOReadCtx
     \sa wolfSSL_SetIOWriteCtx
 */
-int  wolfSSL_set_fd (WOLFSSL* ssl, int fd);
+int  wolfSSL_set_fd(WOLFSSL* ssl, int fd);
+
+/*!
+    \ingroup Setup
+
+    \brief This function assigns a file descriptor (fd) as the
+    input/output facility for the SSL connection. Typically this will be
+    a socket file descriptor. This is a DTLS specific API because it marks that
+    the socket is connected. recvfrom and sendto calls on this fd will have the
+    addr and addr_len parameters set to NULL.
+
+    \return SSL_SUCCESS upon success.
+    \return Bad_FUNC_ARG upon failure.
+
+    \param ssl pointer to the SSL session, created with wolfSSL_new().
+    \param fd file descriptor to use with SSL/TLS connection.
+
+    _Example_
+    \code
+    int sockfd;
+    WOLFSSL* ssl = 0;
+    ...
+    if (connect(sockfd, peer_addr, peer_addr_len) != 0) {
+        // handle connect error
+    }
+    ...
+    ret = wolfSSL_set_dtls_fd_connected(ssl, sockfd);
+    if (ret != SSL_SUCCESS) {
+        // failed to set SSL file descriptor
+    }
+    \endcode
+
+    \sa wolfSSL_CTX_SetIOSend
+    \sa wolfSSL_CTX_SetIORecv
+    \sa wolfSSL_SetIOReadCtx
+    \sa wolfSSL_SetIOWriteCtx
+    \sa wolfDTLS_SetChGoodCb
+*/
+int wolfSSL_set_dtls_fd_connected(WOLFSSL* ssl, int fd)
+
+/*!
+    \ingroup Setup
+
+    \brief Allows setting a callback for a correctly processed and verified DTLS
+           client hello. When using a cookie exchange mechanism (either the
+           HelloVerifyRequest in DTLS 1.2 or the HelloRetryRequest with a cookie
+           extension in DTLS 1.3) this callback is called after the cookie
+           exchange has succeeded. This is useful to use one WOLFSSL object as
+           the listener for new connections and being able to isolate the
+           WOLFSSL object once the ClientHello is verified (either through a
+           cookie exchange or just checking if the ClientHello had the correct
+           format).
+           DTLS 1.2:
+           https://datatracker.ietf.org/doc/html/rfc6347#section-4.2.1
+           DTLS 1.3:
+           https://www.rfc-editor.org/rfc/rfc8446#section-4.2.2
+
+    \return SSL_SUCCESS upon success.
+    \return BAD_FUNC_ARG upon failure.
+
+    \param ssl pointer to the SSL session, created with wolfSSL_new().
+    \param fd file descriptor to use with SSL/TLS connection.
+
+    _Example_
+    \code
+
+    // Called when we have verified a connection
+    static int chGoodCb(WOLFSSL* ssl, void* arg)
+    {
+        // setup peer and file descriptors
+
+    }
+
+    if (wolfDTLS_SetChGoodCb(ssl, chGoodCb, NULL) != WOLFSSL_SUCCESS) {
+         // error setting callback
+    }
+    \endcode
+
+    \sa wolfSSL_set_dtls_fd_connected
+*/
+int wolfDTLS_SetChGoodCb(WOLFSSL* ssl, ClientHelloGoodCb cb, void* user_ctx);
 
 /*!
     \ingroup IO
@@ -3521,9 +3757,11 @@ int  wolfSSL_dtls(WOLFSSL* ssl);
     \return SSL_NOT_IMPLEMENTED will be returned if wolfSSL was not compiled
     with DTLS support.
 
-    \param ssl a pointer to a WOLFSSL structure, created using wolfSSL_new().
-    \param peer pointer to peer’s sockaddr_in structure.
-    \param peerSz size of the sockaddr_in structure pointed to by peer.
+    \param ssl    a pointer to a WOLFSSL structure, created using wolfSSL_new().
+    \param peer   pointer to peer’s sockaddr_in structure. If NULL then the peer
+                  information in ssl is cleared.
+    \param peerSz size of the sockaddr_in structure pointed to by peer. If 0
+                  then the peer information in ssl is cleared.
 
     _Example_
     \code

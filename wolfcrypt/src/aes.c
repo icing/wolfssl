@@ -3212,6 +3212,13 @@ int wc_AesSetIV(Aes* aes, const byte* iv)
         XMEMCPY(aes->reg, iv, AES_BLOCK_SIZE);
     else
         XMEMSET(aes->reg,  0, AES_BLOCK_SIZE);
+
+#if defined(WOLFSSL_AES_COUNTER) || defined(WOLFSSL_AES_CFB) || \
+    defined(WOLFSSL_AES_OFB) || defined(WOLFSSL_AES_XTS)
+    /* Clear any unused bytes from last cipher op. */
+    aes->left = 0;
+#endif
+
     return 0;
 }
 
@@ -4463,30 +4470,54 @@ int wc_AesSetIV(Aes* aes, const byte* iv)
         #ifdef WOLFSSL_CHECK_MEM_ZERO
             wc_MemZero_Add("wc_AesCtrEncrypt scratch", scratch, AES_BLOCK_SIZE);
         #endif
-            /* do as many block size ops as possible */
-            while (sz >= AES_BLOCK_SIZE) {
-            #ifdef XTRANSFORM_AESCTRBLOCK
-                XTRANSFORM_AESCTRBLOCK(aes, out, in);
-            #else
-                ret = wc_AesEncrypt(aes, (byte*)aes->reg, scratch);
-                if (ret != 0) {
-                    ForceZero(scratch, AES_BLOCK_SIZE);
-                #ifdef WOLFSSL_CHECK_MEM_ZERO
-                    wc_MemZero_Check(scratch, AES_BLOCK_SIZE);
-                #endif
-                    return ret;
+        #if defined(HAVE_AES_ECB) && !defined(WOLFSSL_PIC32MZ_CRYPT) && \
+            !defined(XTRANSFORM_AESCTRBLOCK)
+            if (in != out && sz >= AES_BLOCK_SIZE) {
+                int blocks = sz / AES_BLOCK_SIZE;
+                byte* counter = (byte*)aes->reg;
+                byte* c = out;
+                while (blocks--) {
+                    XMEMCPY(c, counter, AES_BLOCK_SIZE);
+                    c += AES_BLOCK_SIZE;
+                    IncrementAesCounter(counter);
                 }
-                xorbuf(scratch, in, AES_BLOCK_SIZE);
-                XMEMCPY(out, scratch, AES_BLOCK_SIZE);
-            #endif
-                IncrementAesCounter((byte*)aes->reg);
 
-                out += AES_BLOCK_SIZE;
-                in  += AES_BLOCK_SIZE;
-                sz  -= AES_BLOCK_SIZE;
-                aes->left = 0;
+                /* reset number of blocks and then do encryption */
+                blocks = sz / AES_BLOCK_SIZE;
+                wc_AesEcbEncrypt(aes, out, out, AES_BLOCK_SIZE * blocks);
+                xorbuf(out, in, AES_BLOCK_SIZE * blocks);
+                in += AES_BLOCK_SIZE * blocks;
+                out += AES_BLOCK_SIZE * blocks;
+                sz -= blocks * AES_BLOCK_SIZE;
             }
-            ForceZero(scratch, AES_BLOCK_SIZE);
+            else
+        #endif
+            {
+                /* do as many block size ops as possible */
+                while (sz >= AES_BLOCK_SIZE) {
+                #ifdef XTRANSFORM_AESCTRBLOCK
+                    XTRANSFORM_AESCTRBLOCK(aes, out, in);
+                #else
+                    ret = wc_AesEncrypt(aes, (byte*)aes->reg, scratch);
+                    if (ret != 0) {
+                        ForceZero(scratch, AES_BLOCK_SIZE);
+                    #ifdef WOLFSSL_CHECK_MEM_ZERO
+                        wc_MemZero_Check(scratch, AES_BLOCK_SIZE);
+                    #endif
+                        return ret;
+                    }
+                    xorbuf(scratch, in, AES_BLOCK_SIZE);
+                    XMEMCPY(out, scratch, AES_BLOCK_SIZE);
+                #endif
+                    IncrementAesCounter((byte*)aes->reg);
+
+                    out += AES_BLOCK_SIZE;
+                    in  += AES_BLOCK_SIZE;
+                    sz  -= AES_BLOCK_SIZE;
+                    aes->left = 0;
+                }
+                ForceZero(scratch, AES_BLOCK_SIZE);
+            }
 
             /* handle non block size remaining and store unused byte count in left */
             if (sz) {
@@ -6619,9 +6650,7 @@ static void GMULT(word64* X, word64* Y)
     word64 Z[2] = {0,0};
     word64 V[2];
     int i, j;
-#ifdef AES_GCM_GMULT_CT
     word64 v1;
-#endif
     V[0] = X[0];  V[1] = X[1];
 
     for (i = 0; i < 2; i++)
@@ -6629,7 +6658,7 @@ static void GMULT(word64* X, word64* Y)
         word64 y = Y[i];
         for (j = 0; j < 64; j++)
         {
-#ifdef AES_GCM_GMULT_CT
+#ifndef AES_GCM_GMULT_NCT
             word64 mask = 0 - (y >> 63);
             Z[0] ^= V[0] & mask;
             Z[1] ^= V[1] & mask;
@@ -6640,27 +6669,11 @@ static void GMULT(word64* X, word64* Y)
             }
 #endif
 
-#ifdef AES_GCM_GMULT_CT
             v1 = (0 - (V[1] & 1)) & 0xE100000000000000ULL;
             V[1] >>= 1;
             V[1] |= V[0] << 63;
             V[0] >>= 1;
             V[0] ^= v1;
-#else
-            if (V[1] & 0x0000000000000001) {
-                V[1] >>= 1;
-                V[1] |= ((V[0] & 0x0000000000000001) ?
-                    0x8000000000000000ULL : 0);
-                V[0] >>= 1;
-                V[0] ^= 0xE100000000000000ULL;
-            }
-            else {
-                V[1] >>= 1;
-                V[1] |= ((V[0] & 0x0000000000000001) ?
-                    0x8000000000000000ULL : 0);
-                V[0] >>= 1;
-            }
-#endif
             y <<= 1;
         }
     }

@@ -657,6 +657,9 @@ WOLFSSL_API int wc_DhPrivKeyToDer(DhKey* key, byte* out, word32* outSz);
                           ecc_key* key, word32 inSz);
     WOLFSSL_API int wc_EccPublicKeyToDer(ecc_key* key, byte* output,
                                          word32 inLen, int with_AlgCurve);
+    WOLFSSL_API int wc_EccPublicKeyToDer_ex(ecc_key* key, byte* output,
+                                         word32 inLen, int with_AlgCurve,
+                                         int comp);
     WOLFSSL_API int wc_EccPublicKeyDerSize(ecc_key* key, int with_AlgCurve);
 #endif
 
@@ -830,6 +833,12 @@ WOLFSSL_API int  wc_ParseCert(
 WOLFSSL_API int wc_GetPubKeyDerFromCert(struct DecodedCert* cert,
                                         byte* derKey, word32* derKeySz);
 
+#ifdef WOLFSSL_FPKI
+WOLFSSL_API int wc_GetUUIDFromCert(struct DecodedCert* cert,
+                                    byte* uuid, word32* uuidSz);
+WOLFSSL_API int wc_GetFASCNFromCert(struct DecodedCert* cert,
+                                    byte* fascn, word32* fascnSz);
+#endif /* WOLFSSL_FPKI */
 #ifdef __cplusplus
     } /* extern "C" */
 #endif

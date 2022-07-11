@@ -60,7 +60,7 @@ Possible ECC enable options:
  * USE_ECC_B_PARAM:     Enable ECC curve B param                default: off
  *                      (on for HAVE_COMP_KEY)
  * WOLFSSL_ECC_CURVE_STATIC:                                    default off (on for windows)
- *                      For the ECC curve paramaters `ecc_set_type` use fixed
+ *                      For the ECC curve parameters `ecc_set_type` use fixed
  *                      array for hex string
  * WC_ECC_NONBLOCK:     Enable non-blocking support for sign/verify.
  *                      Requires SP with WOLFSSL_SP_NONBLOCK
@@ -4096,16 +4096,21 @@ int wc_ecc_get_curve_id_from_dp_params(const ecc_set_type* dp)
 int wc_ecc_get_curve_id_from_oid(const byte* oid, word32 len)
 {
     int curve_idx;
-#ifdef HAVE_OID_DECODING
+#if defined(HAVE_OID_DECODING) || defined(HAVE_OID_ENCODING)
     int ret;
-    word16 decOid[MAX_OID_SZ];
-    word32 decOidSz = sizeof(decOid);
+    #ifdef HAVE_OID_DECODING
+    word16 decOid[MAX_OID_SZ/sizeof(word16)];
+    #else
+    byte  decOid[MAX_OID_SZ];
+    #endif
+    word32 decOidSz;
 #endif
 
     if (oid == NULL)
         return BAD_FUNC_ARG;
 
 #ifdef HAVE_OID_DECODING
+    decOidSz = (word32)sizeof(decOid);
     ret = DecodeObjectId(oid, len, decOid, &decOidSz);
     if (ret != 0) {
         return ret;
@@ -4113,18 +4118,29 @@ int wc_ecc_get_curve_id_from_oid(const byte* oid, word32 len)
 #endif
 
     for (curve_idx = 0; ecc_sets[curve_idx].size != 0; curve_idx++) {
+    #if defined(HAVE_OID_ENCODING) && !defined(HAVE_OID_DECODING)
+        decOidSz = (word32)sizeof(decOid);
+        ret = EncodeObjectId(ecc_sets[curve_idx].oid, ecc_sets[curve_idx].oidSz,
+            decOid, &decOidSz);
+        if (ret != 0) {
+            continue;
+        }
+    #endif
+
         if (
         #ifndef WOLFSSL_ECC_CURVE_STATIC
             ecc_sets[curve_idx].oid &&
         #endif
-        #ifdef HAVE_OID_DECODING
+        #if defined(HAVE_OID_ENCODING) && !defined(HAVE_OID_DECODING)
+            decOidSz == len &&
+                XMEMCMP(decOid, oid, len) == 0
+        #elif defined(HAVE_OID_ENCODING) && defined(HAVE_OID_DECODING)
             /* We double because decOidSz is a count of word16 elements. */
             ecc_sets[curve_idx].oidSz == decOidSz &&
-                              XMEMCMP(ecc_sets[curve_idx].oid, decOid,
-                                      decOidSz * 2) == 0
+                XMEMCMP(ecc_sets[curve_idx].oid, decOid, decOidSz * 2) == 0
         #else
             ecc_sets[curve_idx].oidSz == len &&
-                              XMEMCMP(ecc_sets[curve_idx].oid, oid, len) == 0
+                XMEMCMP(ecc_sets[curve_idx].oid, oid, len) == 0
         #endif
         ) {
             break;
@@ -4308,8 +4324,6 @@ static int wc_ecc_shared_secret_gen_sync(ecc_key* private_key, ecc_point* point,
 #endif
 #endif
 
-    WOLFSSL_ENTER("wc_ecc_shared_secret_gen_sync");
-
 #ifdef HAVE_ECC_CDH
     /* if cofactor flag has been set */
     if (private_key->flags & WC_ECC_FLAG_COFACTOR) {
@@ -4463,8 +4477,6 @@ static int wc_ecc_shared_secret_gen_sync(ecc_key* private_key, ecc_point* point,
         XFREE(k_lcl, private_key->heap, DYNAMIC_TYPE_ECC_BUFFER);
 #endif
 #endif
-
-    WOLFSSL_LEAVE("wc_ecc_shared_secret_gen_sync", err);
 
     return err;
 }
@@ -4649,8 +4661,6 @@ int wc_ecc_shared_secret_ex(ecc_key* private_key, ecc_point* point,
     } /* switch */
 
     RESTORE_VECTOR_REGISTERS();
-
-    WOLFSSL_LEAVE("wc_ecc_shared_secret_ex", err);
 
     /* if async pending then return and skip done cleanup below */
     if (err == WC_PENDING_E) {
@@ -9522,7 +9532,7 @@ int wc_ecc_import_x963_ex(const byte* in, word32 inLen, ecc_key* key,
 
         /* compute x^3 */
         if (err == MP_OKAY)
-            err = mp_sqr(key->pubkey.x, t1);
+            err = mp_sqrmod(key->pubkey.x, curve->prime, t1);
         if (err == MP_OKAY)
             err = mp_mulmod(t1, key->pubkey.x, curve->prime, t1);
 
@@ -10125,6 +10135,9 @@ static int wc_ecc_import_raw_private(ecc_key* key, const char* qx,
             WOLFSSL_MSG("Invalid Qx");
             err = BAD_FUNC_ARG;
         }
+        if (mp_unsigned_bin_size(key->pubkey.y) > key->dp->size) {
+            err = BAD_FUNC_ARG;
+        }
     }
 
     /* read Qy */
@@ -10137,6 +10150,9 @@ static int wc_ecc_import_raw_private(ecc_key* key, const char* qx,
 
         if (mp_isneg(key->pubkey.y)) {
             WOLFSSL_MSG("Invalid Qy");
+            err = BAD_FUNC_ARG;
+        }
+        if (mp_unsigned_bin_size(key->pubkey.y) > key->dp->size) {
             err = BAD_FUNC_ARG;
         }
     }
@@ -13715,7 +13731,7 @@ static int wc_ecc_export_x963_compressed(ecc_key* key, byte* out, word32* outLen
    word32 numlen;
    int    ret = MP_OKAY;
 
-   if (key == NULL || out == NULL || outLen == NULL)
+   if (key == NULL || outLen == NULL)
        return BAD_FUNC_ARG;
 
    if (key->type == ECC_PRIVATEKEY_ONLY)
@@ -13729,8 +13745,14 @@ static int wc_ecc_export_x963_compressed(ecc_key* key, byte* out, word32* outLen
 
    if (*outLen < (1 + numlen)) {
       *outLen = 1 + numlen;
-      return BUFFER_E;
+      return LENGTH_ONLY_E;
    }
+
+   if (out == NULL)
+       return BAD_FUNC_ARG;
+
+   if (mp_unsigned_bin_size(key->pubkey.x) > (int)numlen)
+       return ECC_BAD_ARG_E;
 
    /* store first byte */
    out[0] = mp_isodd(key->pubkey.y) == MP_YES ? ECC_POINT_COMP_ODD : ECC_POINT_COMP_EVEN;

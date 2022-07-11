@@ -1169,6 +1169,33 @@ enum {
     #error RSA maximum bit size must be multiple of 8
 #endif
 
+/* MySQL wants to be able to use 8192-bit numbers. */
+#if defined(WOLFSSL_MYSQL_COMPATIBLE) || \
+        (defined(USE_FAST_MATH) && defined(FP_MAX_BITS) && \
+         FP_MAX_BITS >= 16384) || \
+        ((defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH)) && \
+         SP_INT_MAX_BITS >= 16384)
+     /* Maximum supported number length is 8192-bit. */
+     #define ENCRYPT_BASE_BITS  8192
+#elif defined(USE_FAST_MATH) && defined(FP_MAX_BITS)
+     /* Use the FP size down to a min of 1024-bit. */
+     #if FP_MAX_BITS > 2048
+         #define ENCRYPT_BASE_BITS  (FP_MAX_BITS / 2)
+     #else
+         #define ENCRYPT_BASE_BITS  1024
+     #endif
+#elif defined(WOLFSSL_SP_MATH) || defined(WOLFSSL_SP_MATH)
+    /* Use the SP math size down to a min of 1024-bit. */
+    #if SP_INT_MAX_BITS > 2048
+        #define ENCRYPT_BASE_BITS  (SP_INT_MAX_BITS / 2)
+    #else
+        #define ENCRYPT_BASE_BITS  1024
+    #endif
+#else
+    /* Integer/heap maths - support 4096-bit. */
+    #define ENCRYPT_BASE_BITS  4096
+#endif
+
 enum Misc {
     CIPHER_BYTE    = 0x00,         /* Default ciphers */
     ECC_BYTE       = 0xC0,         /* ECC first cipher suite byte */
@@ -1181,6 +1208,7 @@ enum Misc {
 
     DTLS_MAJOR      = 0xfe,     /* DTLS major version number */
     DTLS_MINOR      = 0xff,     /* DTLS minor version number */
+    DTLS_BOGUS_MINOR = 0xfe,    /* DTLS 0xfe was skipped, see RFC6347 Sec. 1 */
     DTLSv1_2_MINOR  = 0xfd,     /* DTLS minor version number */
     DTLSv1_3_MINOR  = 0xfc,     /* DTLS minor version number */
     SSLv3_MAJOR     = 3,        /* SSLv3 and TLSv1+  major version number */
@@ -1207,21 +1235,12 @@ enum Misc {
 #endif
 #endif
 #ifdef HAVE_PQC
-    ENCRYPT_LEN     = 1500,     /* allow 1500 bit static buffer for falcon */
-#else
-#if defined(WOLFSSL_MYSQL_COMPATIBLE) || \
-    (defined(USE_FAST_MATH) && defined(FP_MAX_BITS) && FP_MAX_BITS >= 16384)
-#if !defined(NO_PSK) && defined(USE_FAST_MATH)
-    ENCRYPT_LEN     = (FP_MAX_BITS / 2 / 8) + MAX_PSK_ID_LEN + 2,
-#else
-    ENCRYPT_LEN     = 1024,     /* allow 8192 bit static buffer */
-#endif
+    ENCRYPT_LEN     = 1500,     /* allow 1500 byte static buffer for falcon */
 #else
 #ifndef NO_PSK
-    ENCRYPT_LEN     = 512 + MAX_PSK_ID_LEN + 2,    /* 4096 bit static buffer */
+    ENCRYPT_LEN     = (ENCRYPT_BASE_BITS / 8) + MAX_PSK_ID_LEN + 2,
 #else
-    ENCRYPT_LEN     = 512,      /* allow 4096 bit static buffer */
-#endif
+    ENCRYPT_LEN     = (ENCRYPT_BASE_BITS / 8),
 #endif
 #endif
     SIZEOF_SENDER   =  4,       /* clnt or srvr           */
@@ -2204,6 +2223,7 @@ WOLFSSL_LOCAL int DoVerifyCallback(WOLFSSL_CERT_MANAGER* cm, WOLFSSL* ssl,
 /* wolfSSL Sock Addr */
 struct WOLFSSL_SOCKADDR {
     unsigned int sz; /* sockaddr size */
+    unsigned int bufSz; /* size of allocated buffer */
     void*        sa; /* pointer to the sockaddr_in or sockaddr_in6 */
 };
 
@@ -2211,6 +2231,11 @@ typedef struct WOLFSSL_DTLS_CTX {
     WOLFSSL_SOCKADDR peer;
     int rfd;
     int wfd;
+    byte userSet:1;
+    byte connected:1; /* When set indicates rfd and wfd sockets are
+                       * connected (connect() and bind() both called).
+                       * This means that sendto and recvfrom do not need to
+                       * specify and store the peer address. */
 } WOLFSSL_DTLS_CTX;
 
 
@@ -4502,6 +4527,11 @@ struct WOLFSSL {
 #ifdef WOLFSSL_STATIC_MEMORY
     WOLFSSL_HEAP_HINT heap_hint;
 #endif
+#if defined(WOLFSSL_DTLS) && !defined(NO_WOLFSSL_SERVER)
+    ClientHelloGoodCb chGoodCb;        /*  notify user we parsed a verified
+                                        *  ClientHello */
+    void*             chGoodCtx;       /*  user ClientHello cb context  */
+#endif
 #ifndef NO_HANDSHAKE_DONE_CB
     HandShakeDoneCb hsDoneCb;          /*  notify user handshake done */
     void*           hsDoneCtx;         /*  user handshake cb context  */
@@ -4567,6 +4597,7 @@ struct WOLFSSL {
 #ifndef NO_RSA
     RsaKey*         peerRsaKey;
 #if defined(WOLFSSL_RENESAS_TSIP_TLS) || defined(WOLFSSL_RENESAS_SCEPROTECT)
+    void*           RenesasUserCtx;
     byte*           peerSceTsipEncRsaKeyIndex;
 #endif
     byte            peerRsaKeyPresent;
@@ -4682,6 +4713,8 @@ struct WOLFSSL {
     word32 dtls13FragOffset;
     byte dtls13FragHandshakeType;
     Dtls13Rtx dtls13Rtx;
+    byte *dtls13ClientHello;
+    word16 dtls13ClientHelloSz;
 
 #endif /* WOLFSSL_DTLS13 */
 #endif /* WOLFSSL_DTLS */
@@ -5046,7 +5079,7 @@ static const byte server[SIZEOF_SENDER+1] = { 0x53, 0x52, 0x56, 0x52, 0x00 }; /*
 static const byte tls_client[FINISHED_LABEL_SZ + 1] = "client finished";
 static const byte tls_server[FINISHED_LABEL_SZ + 1] = "server finished";
 
-#ifdef OPENSSL_EXTRA
+#if defined(OPENSSL_EXTRA) || defined(WOLFSSL_WPAS_SMALL)
 typedef struct {
     int name_len;
     const char *name;
@@ -5061,7 +5094,7 @@ extern const WOLF_EC_NIST_NAME kNistCurves[];
 #else
 #define kNistCurves_MAX_NAME_LEN 7
 #endif
-#endif
+#endif /* OPENSSL_EXTRA || WOLFSSL_WPAS_SMALL */
 
 /* internal functions */
 WOLFSSL_LOCAL int SendChangeCipher(WOLFSSL* ssl);
@@ -5119,7 +5152,7 @@ WOLFSSL_LOCAL IOTSAFE *wolfSSL_get_iotsafe_ctx(WOLFSSL *ssl);
 WOLFSSL_LOCAL int wolfSSL_set_iotsafe_ctx(WOLFSSL *ssl, IOTSAFE *iotsafe);
 #endif
 
-#if defined(OPENSSL_EXTRA) && defined(HAVE_ECC)
+#if (defined(OPENSSL_EXTRA) || defined(WOLFSSL_WPAS_SMALL)) && defined(HAVE_ECC)
 WOLFSSL_LOCAL int SetECKeyInternal(WOLFSSL_EC_KEY* eckey);
 WOLFSSL_LOCAL int SetECKeyExternal(WOLFSSL_EC_KEY* eckey);
 #endif
@@ -5215,6 +5248,8 @@ WOLFSSL_LOCAL int cipherExtraData(WOLFSSL* ssl);
 
 #ifndef NO_WOLFSSL_CLIENT
     WOLFSSL_LOCAL int SendClientHello(WOLFSSL* ssl);
+    WOLFSSL_LOCAL int DoHelloVerifyRequest(WOLFSSL* ssl, const byte* input, word32* inOutIdx,
+        word32 size);
     #ifdef WOLFSSL_TLS13
     WOLFSSL_LOCAL int SendTls13ClientHello(WOLFSSL* ssl);
     #endif
@@ -5444,6 +5479,11 @@ WOLFSSL_LOCAL int wolfSSL_sk_BY_DIR_entry_push(WOLF_STACK_OF(wolfSSL_BY_DIR_entr
 #if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
 WOLFSSL_LOCAL int oid2nid(word32 oid, int grp);
 WOLFSSL_LOCAL word32 nid2oid(int nid, int grp);
+#endif
+
+#ifdef WOLFSSL_DTLS
+WOLFSSL_API int wolfSSL_DtlsUpdateWindow(word16 cur_hi, word32 cur_lo,
+        word16* next_hi, word32* next_lo, word32 *window);
 #endif
 
 #ifdef WOLFSSL_DTLS13

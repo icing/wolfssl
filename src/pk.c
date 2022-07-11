@@ -118,7 +118,9 @@ static int pk_bn_field_print_fp(XFILE fp, int indent, const char* field,
 }
 #endif /* !NO_CERTS && XFPRINTF && !NO_FILESYSTEM && !NO_STDIO_FILESYSTEM &&
         * (!NO_DSA || !NO_RSA || HAVE_ECC) */
+#endif /* OPENSSL_EXTRA || WOLFSSL_WPAS_SMALL */
 
+#if defined(OPENSSL_EXTRA)
 #if defined(XSNPRINTF) && !defined(NO_BIO) && !defined(NO_RSA) && \
     !defined(HAVE_FAST_RSA)
 /* snprintf() must be available */
@@ -149,10 +151,16 @@ static int wolfssl_print_indent(WOLFSSL_BIO* bio, char* line, int lineLen,
 
     if (indent > 0) {
         /* Print indent spaces. */
-        lineLen = (int)XSNPRINTF(line, lineLen - 1, "%*s", indent, " ");
-        /* Write indents string to BIO */
-        if (wolfSSL_BIO_write(bio, line, lineLen) <= 0) {
+        int len_wanted = XSNPRINTF(line, lineLen, "%*s", indent, " ");
+        if (len_wanted >= lineLen) {
+            WOLFSSL_MSG("Buffer overflow formatting indentation");
             ret = 0;
+        }
+        else {
+            /* Write indents string to BIO */
+            if (wolfSSL_BIO_write(bio, line, len_wanted) <= 0) {
+                ret = 0;
+            }
         }
     }
 
@@ -191,11 +199,16 @@ static int wolfssl_print_value(WOLFSSL_BIO* bio, mp_int* value,
         /* Get 32-bits of value. */
         v = (word32)value->dp[0];
         /* Print the line to the string. */
-        len = (int)XSNPRINTF(line, sizeof(line) - 1, "%s %u (0x%x)\n", name, v,
+        len = (int)XSNPRINTF(line, sizeof(line), "%s %u (0x%x)\n", name, v,
             v);
-        /* Write string to BIO */
-        if (wolfSSL_BIO_write(bio, line, len) <= 0) {
+        if (len >= (int)sizeof(line)) {
+            WOLFSSL_MSG("Buffer overflow while formatting value");
             ret = 0;
+        } else {
+            /* Write string to BIO */
+            if (wolfSSL_BIO_write(bio, line, len) <= 0) {
+                ret = 0;
+            }
         }
     }
 
@@ -245,9 +258,15 @@ static int wolfssl_print_number(WOLFSSL_BIO* bio, mp_int* num, const char* name,
     }
     if (ret == 1) {
         /* Print header string line to string. */
-        li = XSNPRINTF(line, sizeof(line) - 1, "%s\n", name);
-        if (wolfSSL_BIO_write(bio, line, li) <= 0) {
+        li = XSNPRINTF(line, sizeof(line), "%s\n", name);
+        if (li >= (int)sizeof(line)) {
+            WOLFSSL_MSG("Buffer overflow formatting name");
             ret = 0;
+        }
+        else {
+            if (wolfSSL_BIO_write(bio, line, li) <= 0) {
+                ret = 0;
+            }
         }
     }
     if (ret == 1) {
@@ -257,15 +276,26 @@ static int wolfssl_print_number(WOLFSSL_BIO* bio, mp_int* num, const char* name,
     if (ret == 1) {
         /* Start first digit line with spaces.
          * Writing out zeros ensures number is a positive value. */
-        li = XSNPRINTF(line, sizeof(line) - 1, PRINT_NUM_INDENT "%s",
+        li = XSNPRINTF(line, sizeof(line), PRINT_NUM_INDENT "%s",
             mp_leading_bit(num) ?  "00:" : "");
+        if (li >= (int)sizeof(line)) {
+            WOLFSSL_MSG("Buffer overflow formatting spaces");
+            ret = 0;
+        }
     }
 
     /* Put out each line of numbers. */
     for (i = 0; (ret == 1) && (i < rawLen); i++) {
-        /* Check for a complete line. */
-        if (li >= PRINT_NUM_MAX_DIGIT_LINE) {
-            /* More bytes coming so append carriage return. */
+        /* Encode another byte as 2 hex digits and append colon. */
+        int len_wanted = XSNPRINTF(line + li, sizeof(line) - li, "%02x:",
+                                   rawKey[i]);
+        /* Check if there was room -- if not, print the current line, not
+         * including the newest octet.
+         */
+        if (len_wanted >= (int)sizeof(line) - li) {
+            /* bump current octet to the next line. */
+            --i;
+            /* More bytes coming so add a line break. */
             line[li++] = '\n';
             /* Write out the line. */
             if (wolfSSL_BIO_write(bio, line, li) <= 0) {
@@ -279,8 +309,9 @@ static int wolfssl_print_number(WOLFSSL_BIO* bio, mp_int* num, const char* name,
             XSTRNCPY(line, PRINT_NUM_INDENT, PRINT_NUM_INDENT_CNT + 1);
             li = PRINT_NUM_INDENT_CNT;
         }
-        /* Encode another byte as 2 hex digits and append colon. */
-        li += XSNPRINTF(line + li, sizeof(line) - 1 - li, "%02x:", rawKey[i]);
+        else {
+            li += len_wanted;
+        }
     }
 
     if (ret == 1) {
@@ -1563,7 +1594,7 @@ int wolfSSL_PEM_write_mem_RSAPrivateKey(RSA* rsa, const EVP_CIPHER* cipher,
             DYNAMIC_TYPE_TMP_BUFFER);
         if (tmpBuf == NULL) {
             WOLFSSL_MSG("Extending DER buffer failed");
-            XFREE(derBuf, NULL, DYNAMIC_TYPE_DER);
+            XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
             ret = 0;
         }
         else {
@@ -1614,7 +1645,7 @@ int wolfSSL_PEM_write_mem_RSAPrivateKey(RSA* rsa, const EVP_CIPHER* cipher,
 
     XFREE(tmp, NULL, DYNAMIC_TYPE_KEY);
     XFREE(cipherInfo, NULL, DYNAMIC_TYPE_STRING);
-    XFREE(derBuf, rsa->heap, DYNAMIC_TYPE_DER);
+    XFREE(derBuf, rsa->heap, DYNAMIC_TYPE_TMP_BUFFER);
     return ret;
 }
 
@@ -1890,10 +1921,16 @@ int wolfSSL_RSA_print(WOLFSSL_BIO* bio, WOLFSSL_RSA* rsa, int indent)
     }
     if (ret == 1) {
         /* Print header line. */
-        len = XSNPRINTF(line, sizeof(line) - 1, "\nRSA %s: (%d bit)\n",
+        len = XSNPRINTF(line, sizeof(line), "\nRSA %s: (%d bit)\n",
             (!mp_iszero(&key->d)) ? "Private-Key" : "Public-Key", sz);
-        if (wolfSSL_BIO_write(bio, line, len) <= 0) {
+        if (len >= (int)sizeof(line)) {
+            WOLFSSL_MSG("Buffer overflow while formatting key preamble");
             ret = 0;
+        }
+        else {
+            if (wolfSSL_BIO_write(bio, line, len) <= 0) {
+                ret = 0;
+            }
         }
     }
 
@@ -5149,7 +5186,7 @@ int wolfSSL_PEM_write_bio_DSAPrivateKey(WOLFSSL_BIO* bio, WOLFSSL_DSA* dsa,
     derSz = wc_DsaKeyToDer((DsaKey*)dsa->internal, derBuf, der_max_len);
     if (derSz < 0) {
         WOLFSSL_MSG("wc_DsaKeyToDer failed");
-        XFREE(derBuf, NULL, DYNAMIC_TYPE_DER);
+        XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
         wolfSSL_EVP_PKEY_free(pkey);
         return 0;
     }
@@ -6126,6 +6163,10 @@ void wolfSSL_DH_free(WOLFSSL_DH* dh)
         if (doFree == 0) {
             return;
         }
+
+    #ifndef SINGLE_THREADED
+        wc_FreeMutex(&dh->refMutex);
+    #endif
 
         if (dh->internal) {
             wc_FreeDhKey((DhKey*)dh->internal);
@@ -7602,7 +7643,7 @@ void wolfSSL_DH_get0_pqg(const WOLFSSL_DH *dh, const WOLFSSL_BIGNUM **p,
 
 #ifdef HAVE_ECC
 
-#ifdef OPENSSL_EXTRA
+#if defined(OPENSSL_EXTRA)
 
 #ifndef NO_CERTS
 
@@ -8293,6 +8334,10 @@ void wolfSSL_EC_KEY_free(WOLFSSL_EC_KEY *key)
             return;
         }
 
+    #ifndef SINGLE_THREADED
+        wc_FreeMutex(&key->refMutex);
+    #endif
+
         if (key->internal != NULL) {
             wc_ecc_free((ecc_key*)key->internal);
             XFREE(key->internal, heap, DYNAMIC_TYPE_ECC);
@@ -8808,42 +8853,6 @@ void wolfSSL_EC_GROUP_set_asn1_flag(WOLFSSL_EC_GROUP *group, int flag)
 }
 #endif
 
-WOLFSSL_EC_GROUP *wolfSSL_EC_GROUP_new_by_curve_name(int nid)
-{
-    WOLFSSL_EC_GROUP *g;
-    int x, eccEnum;
-
-    WOLFSSL_ENTER("wolfSSL_EC_GROUP_new_by_curve_name");
-
-    /* curve group */
-    g = (WOLFSSL_EC_GROUP*)XMALLOC(sizeof(WOLFSSL_EC_GROUP), NULL,
-                                    DYNAMIC_TYPE_ECC);
-    if (g == NULL) {
-        WOLFSSL_MSG("wolfSSL_EC_GROUP_new_by_curve_name malloc failure");
-        return NULL;
-    }
-    XMEMSET(g, 0, sizeof(WOLFSSL_EC_GROUP));
-
-    /* set the nid of the curve */
-    g->curve_nid = nid;
-    g->curve_idx = -1;
-
-    /* If NID passed in is OpenSSL type, convert it to ecc_curve_id enum */
-    eccEnum = NIDToEccEnum(nid);
-    if (eccEnum != -1) {
-        /* search and set the corresponding internal curve idx */
-        for (x = 0; ecc_sets[x].size != 0; x++) {
-            if (ecc_sets[x].id == eccEnum) {
-                g->curve_idx = x;
-                g->curve_oid = ecc_sets[x].oidSum;
-                break;
-            }
-        }
-    }
-
-    return g;
-}
-
 /* return code compliant with OpenSSL :
  *   the curve nid if success, 0 if error
  */
@@ -8926,6 +8935,44 @@ int wolfSSL_EC_GROUP_get_degree(const WOLFSSL_EC_GROUP *group)
             return 0;
     }
 }
+#endif /* OPENSSL_EXTRA */
+
+#if defined(OPENSSL_EXTRA) || defined(WOLFSSL_WPAS_SMALL)
+WOLFSSL_EC_GROUP *wolfSSL_EC_GROUP_new_by_curve_name(int nid)
+{
+    WOLFSSL_EC_GROUP *g;
+    int x, eccEnum;
+
+    WOLFSSL_ENTER("wolfSSL_EC_GROUP_new_by_curve_name");
+
+    /* curve group */
+    g = (WOLFSSL_EC_GROUP*)XMALLOC(sizeof(WOLFSSL_EC_GROUP), NULL,
+                                    DYNAMIC_TYPE_ECC);
+    if (g == NULL) {
+        WOLFSSL_MSG("wolfSSL_EC_GROUP_new_by_curve_name malloc failure");
+        return NULL;
+    }
+    XMEMSET(g, 0, sizeof(WOLFSSL_EC_GROUP));
+
+    /* set the nid of the curve */
+    g->curve_nid = nid;
+    g->curve_idx = -1;
+
+    /* If NID passed in is OpenSSL type, convert it to ecc_curve_id enum */
+    eccEnum = NIDToEccEnum(nid);
+    if (eccEnum != -1) {
+        /* search and set the corresponding internal curve idx */
+        for (x = 0; ecc_sets[x].size != 0; x++) {
+            if (ecc_sets[x].id == eccEnum) {
+                g->curve_idx = x;
+                g->curve_oid = ecc_sets[x].oidSum;
+                break;
+            }
+        }
+    }
+
+    return g;
+}
 
 /* Converts OpenSSL NID value of ECC curves to the associated enum values in
    ecc_curve_id, used by ecc_sets[].*/
@@ -8994,6 +9041,30 @@ int NIDToEccEnum(int n)
     }
 }
 
+int wolfSSL_EC_GROUP_order_bits(const WOLFSSL_EC_GROUP *group)
+{
+    int ret;
+    mp_int order;
+
+    if (group == NULL || group->curve_idx < 0) {
+        WOLFSSL_MSG("wolfSSL_EC_GROUP_order_bits NULL error");
+        return 0;
+    }
+
+    ret = mp_init(&order);
+    if (ret == 0) {
+        ret = mp_read_radix(&order, ecc_sets[group->curve_idx].order,
+            MP_RADIX_HEX);
+        if (ret == 0)
+            ret = mp_count_bits(&order);
+        mp_clear(&order);
+    }
+
+    return ret;
+}
+#endif /* OPENSSL_EXTRA || WOLFSSL_WPAS_SMALL */
+
+#if defined(OPENSSL_EXTRA)
 /* return code compliant with OpenSSL :
  *   1 if success, 0 if error
  */
@@ -9020,28 +9091,6 @@ int wolfSSL_EC_GROUP_get_order(const WOLFSSL_EC_GROUP *group,
     }
 
     return 1;
-}
-
-int wolfSSL_EC_GROUP_order_bits(const WOLFSSL_EC_GROUP *group)
-{
-    int ret;
-    mp_int order;
-
-    if (group == NULL || group->curve_idx < 0) {
-        WOLFSSL_MSG("wolfSSL_EC_GROUP_order_bits NULL error");
-        return 0;
-    }
-
-    ret = mp_init(&order);
-    if (ret == 0) {
-        ret = mp_read_radix(&order, ecc_sets[group->curve_idx].order,
-            MP_RADIX_HEX);
-        if (ret == 0)
-            ret = mp_count_bits(&order);
-        mp_clear(&order);
-    }
-
-    return ret;
 }
 
 /* End EC_GROUP */
@@ -10326,7 +10375,7 @@ WOLFSSL_ECDSA_SIG *wolfSSL_ECDSA_do_sign(const unsigned char *d, int dlen,
             }
         }
         else {
-            WOLFSSL_MSG("wc_ecc_sign_hash_ex failed");
+            WOLFSSL_MSG("wc_ecc_sign_hash failed");
         }
     }
 
@@ -10759,7 +10808,7 @@ int wolfSSL_PEM_write_bio_ECPrivateKey(WOLFSSL_BIO* bio, WOLFSSL_EC_KEY* ec,
     derSz = wc_EccKeyToDer((ecc_key*)ec->internal, derBuf, der_max_len);
     if (derSz < 0) {
         WOLFSSL_MSG("wc_EccKeyToDer failed");
-        XFREE(derBuf, NULL, DYNAMIC_TYPE_DER);
+        XFREE(derBuf, NULL, DYNAMIC_TYPE_TMP_BUFFER);
         wolfSSL_EVP_PKEY_free(pkey);
         return 0;
     }
@@ -11045,7 +11094,7 @@ int wolfSSL_EC_KEY_LoadDer_ex(WOLFSSL_EC_KEY* key, const unsigned char* derBuf,
     return 1;
 }
 
-#endif /* OPENSSL_EXTRA */
+#endif /* OPENSSL_EXTRA || WOLFSSL_WPAS_SMALL*/
 
 #endif /* HAVE_ECC */
 

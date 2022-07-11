@@ -60,6 +60,10 @@
 #endif
 #endif
 
+#if defined(WOLFSSL_RENESAS_TSIP_TLS)
+    #include <wolfssl/wolfcrypt/port/Renesas/renesas-tsip-crypt.h>
+#endif
+
 #if defined(WOLFSSL_TLS13) && defined(HAVE_SUPPORTED_CURVES)
 static int TLSX_KeyShare_IsSupported(int namedGroup);
 static void TLSX_KeyShare_FreeAll(KeyShareEntry* list, void* heap);
@@ -158,7 +162,7 @@ int BuildTlsHandshakeHash(WOLFSSL* ssl, byte* hash, word32* hashLen)
 
     *hashLen = hashSz;
 #ifdef WOLFSSL_CHECK_MEM_ZERO
-     wc_MemZero_Add("TLS hasndshake hash", hash, hashSz);
+     wc_MemZero_Add("TLS handshake hash", hash, hashSz);
 #endif
 
     if (ret != 0)
@@ -6165,8 +6169,17 @@ static int TLSX_Cookie_Parse(WOLFSSL* ssl, const byte* input, word16 length,
 
     /* client_hello */
     extension = TLSX_Find(ssl->extensions, TLSX_COOKIE);
-    if (extension == NULL)
-        return HRR_COOKIE_ERROR;
+    if (extension == NULL) {
+#ifdef WOLFSSL_DTLS13
+        if (ssl->options.dtls && IsAtLeastTLSv1_3(ssl->version))
+            /* Allow a cookie extension with DTLS 1.3 because it is possible
+             * that a different SSL instance sent the cookie but we are now
+             * receiving it. */
+            return TLSX_Cookie_Use(ssl, input + idx, len, NULL, 0, 0);
+        else
+#endif
+            return HRR_COOKIE_ERROR;
+    }
 
     cookie = (Cookie*)extension->data;
     if (cookie->len != len || XMEMCMP(&cookie->data, input + idx, len) != 0)
@@ -6883,6 +6896,12 @@ static int TLSX_KeyShare_GenEccKey(WOLFSSL *ssl, KeyShareEntry* kse)
         kse->keyLen = keySize;
         kse->pubKeyLen = keySize * 2 + 1;
 
+    #if defined(WOLFSSL_RENESAS_TSIP_TLS) && (WOLFSSL_RENESAS_TSIP_VER >= 115)
+        ret = tsip_Tls13GenEccKeyPair(ssl, kse);
+        if (ret != CRYPTOCB_UNAVAILABLE) {
+            return ret;
+        }
+    #endif
         /* Allocate an ECC key to hold private key. */
         kse->key = (byte*)XMALLOC(sizeof(ecc_key), ssl->heap, DYNAMIC_TYPE_ECC);
         if (kse->key == NULL) {
@@ -7765,6 +7784,12 @@ static int TLSX_KeyShare_ProcessEcc(WOLFSSL* ssl, KeyShareEntry* keyShareEntry)
             XFREE(ssl->peerEccKey, ssl->heap, DYNAMIC_TYPE_ECC);
             ssl->peerEccKeyPresent = 0;
         }
+#if defined(WOLFSSL_RENESAS_TSIP_TLS) && (WOLFSSL_RENESAS_TSIP_VER >= 115)
+        ret = tsip_Tls13GenSharedSecret(ssl, keyShareEntry);
+        if (ret != CRYPTOCB_UNAVAILABLE) {
+            return ret;
+        }
+#endif
 
         ssl->peerEccKey = (ecc_key*)XMALLOC(sizeof(ecc_key), ssl->heap,
                                             DYNAMIC_TYPE_ECC);

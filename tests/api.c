@@ -338,9 +338,10 @@
 #if (defined(SESSION_CERTS) && defined(TEST_PEER_CERT_CHAIN)) || \
     defined(HAVE_SESSION_TICKET) || (defined(OPENSSL_EXTRA) && \
     defined(WOLFSSL_CERT_EXT) && defined(WOLFSSL_CERT_GEN)) || \
-    defined(WOLFSSL_TEST_STATIC_BUILD)
+    defined(WOLFSSL_TEST_STATIC_BUILD) || defined(WOLFSSL_DTLS)
     /* for testing SSL_get_peer_cert_chain, or SESSION_TICKET_HINT_DEFAULT,
-     * or for setting authKeyIdSrc in WOLFSSL_X509 */
+     * for setting authKeyIdSrc in WOLFSSL_X509, or testing DTLS sequence
+     * number tracking */
 #include "wolfssl/internal.h"
 #endif
 
@@ -2258,6 +2259,44 @@ static void test_wolfSSL_CertManagerNameConstraint5(void)
     wolfSSL_CertManagerFree(cm);
     wolfSSL_X509_free(ca);
     wolfSSL_EVP_PKEY_free(priv);
+#endif
+}
+
+static void test_wolfSSL_FPKI(void)
+{
+#if defined(WOLFSSL_FPKI) && !defined(NO_FILESYSTEM)
+    XFILE f;
+    const char* fpkiCert = "./certs/fpki-cert.der";
+    DecodedCert cert;
+    byte buf[4096];
+    byte* uuid;
+    byte* fascn;
+    word32 fascnSz;
+    word32 uuidSz;
+    int bytes;
+
+    printf(testingFmt, "test_wolfSSL_FPKI");
+    f = XFOPEN(fpkiCert, "rb");
+    AssertTrue((f != XBADFILE));
+    bytes = (int)XFREAD(buf, 1, sizeof(buf), f);
+    XFCLOSE(f);
+
+    wc_InitDecodedCert(&cert, buf, bytes, NULL);
+    AssertIntEQ(wc_ParseCert(&cert, CERT_TYPE, 0, NULL), 0);
+    AssertIntEQ(wc_GetFASCNFromCert(&cert, NULL, &fascnSz), LENGTH_ONLY_E) ;
+    fascn = (byte*)XMALLOC(fascnSz, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    AssertNotNull(fascn);
+    AssertIntEQ(wc_GetFASCNFromCert(&cert, fascn, &fascnSz), 0);
+    XFREE(fascn, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+
+    AssertIntEQ(wc_GetUUIDFromCert(&cert, NULL, &uuidSz), LENGTH_ONLY_E);
+    uuid = (byte*)XMALLOC(uuidSz, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    AssertNotNull(uuid);
+    AssertIntEQ(wc_GetUUIDFromCert(&cert, uuid, &uuidSz), 0);
+    XFREE(uuid, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+    wc_FreeDecodedCert(&cert);
+
+    printf(resultFmt, passed);
 #endif
 }
 
@@ -8979,14 +9018,15 @@ static void test_wolfSSL_URI(void)
 
     x509 = wolfSSL_X509_load_certificate_file(uri, WOLFSSL_FILETYPE_PEM);
     AssertNotNull(x509);
-
     wolfSSL_FreeX509(x509);
 
     x509 = wolfSSL_X509_load_certificate_file(badUri, WOLFSSL_FILETYPE_PEM);
-#if !defined(IGNORE_NAME_CONSTRAINTS) && !defined(WOLFSSL_NO_ASN_STRICT)
+#if !defined(IGNORE_NAME_CONSTRAINTS) && !defined(WOLFSSL_NO_ASN_STRICT) \
+    && !defined(WOLFSSL_FPKI)
     AssertNull(x509);
 #else
     AssertNotNull(x509);
+    wolfSSL_FreeX509(x509);
 #endif
 
     printf(resultFmt, passed);
@@ -21191,7 +21231,7 @@ static int test_wc_ed25519_import_public (void)
     printf(testingFmt, "wc_ed25519_import_public()");
 
     if (ret == 0) {
-        ret = wc_ed25519_import_public(in, inlen, &pubKey);
+        ret = wc_ed25519_import_public_ex(in, inlen, &pubKey, 1);
 
         if (ret == 0 && XMEMCMP(in, pubKey.p, inlen) == 0) {
             ret = 0;
@@ -21261,8 +21301,8 @@ static int test_wc_ed25519_import_private_key (void)
     printf(testingFmt, "wc_ed25519_import_private_key()");
 
     if (ret == 0) {
-        ret = wc_ed25519_import_private_key(privKey, privKeySz, pubKey,
-                                                            pubKeySz, &key);
+        ret = wc_ed25519_import_private_key_ex(privKey, privKeySz, pubKey,
+                                                             pubKeySz, &key, 1);
         if (ret == 0 && (XMEMCMP(pubKey, key.p, privKeySz) != 0
                                 || XMEMCMP(privKey, key.k, pubKeySz) != 0)) {
             ret = WOLFSSL_FATAL_ERROR;
@@ -21274,7 +21314,8 @@ static int test_wc_ed25519_import_private_key (void)
         ret = wc_ed25519_export_private(&key, bothKeys, &bothKeysSz);
 
     if (ret == 0) {
-        ret = wc_ed25519_import_private_key(bothKeys, bothKeysSz, NULL, 0, &key);
+        ret = wc_ed25519_import_private_key_ex(bothKeys, bothKeysSz, NULL, 0,
+            &key, 1);
         if (ret == 0 && (XMEMCMP(pubKey, key.p, privKeySz) != 0
                                 || XMEMCMP(privKey, key.k, pubKeySz) != 0)) {
             ret = WOLFSSL_FATAL_ERROR;
@@ -23012,7 +23053,7 @@ static int test_wc_ed448_import_public (void)
     printf(testingFmt, "wc_ed448_import_public()");
 
     if (ret == 0) {
-        ret = wc_ed448_import_public(in, inlen, &pubKey);
+        ret = wc_ed448_import_public_ex(in, inlen, &pubKey, 1);
 
         if (ret == 0 && XMEMCMP(in, pubKey.p, inlen) == 0) {
             ret = 0;
@@ -23084,8 +23125,8 @@ static int test_wc_ed448_import_private_key (void)
     printf(testingFmt, "wc_ed448_import_private_key()");
 
     if (ret == 0) {
-        ret = wc_ed448_import_private_key(privKey, privKeySz, pubKey, pubKeySz,
-                                                                          &key);
+        ret = wc_ed448_import_private_key_ex(privKey, privKeySz, pubKey,
+                                                             pubKeySz, &key, 1);
         if (ret == 0 && (XMEMCMP(pubKey, key.p, privKeySz) != 0 ||
                                       XMEMCMP(privKey, key.k, pubKeySz) != 0)) {
             ret = WOLFSSL_FATAL_ERROR;
@@ -23097,7 +23138,8 @@ static int test_wc_ed448_import_private_key (void)
         ret = wc_ed448_export_private(&key, bothKeys, &bothKeysSz);
 
     if (ret == 0) {
-        ret = wc_ed448_import_private_key(bothKeys, bothKeysSz, NULL, 0, &key);
+        ret = wc_ed448_import_private_key_ex(bothKeys, bothKeysSz, NULL, 0,
+                                                                       &key, 1);
         if (ret == 0 && (XMEMCMP(pubKey, key.p, privKeySz) != 0 ||
                                       XMEMCMP(privKey, key.k, pubKeySz) != 0)) {
             ret = WOLFSSL_FATAL_ERROR;
@@ -24674,7 +24716,12 @@ static int test_wc_ecc_export_x963_ex (void)
         if (ret == BAD_FUNC_ARG) {
             ret = wc_ecc_export_x963_ex(&key, out, &badOutLen, COMP);
         }
-        if (ret == BUFFER_E) {
+#if defined(HAVE_FIPS) && (!defined(FIPS_VERSION_LT) || FIPS_VERSION_LT(5,3))
+        if (ret == BUFFER_E)
+#else
+        if (ret == LENGTH_ONLY_E)
+#endif
+        {
             key.idx = -4;
             ret = wc_ecc_export_x963_ex(&key, out, &outlen, COMP);
         }
@@ -26275,7 +26322,7 @@ static int test_wc_ecc_get_curve_id_from_oid (void)
     /* Good Case */
     if (ret == 0) {
         ret = wc_ecc_get_curve_id_from_oid(oid, len);
-        if (ret == 7) {
+        if (ret == ECC_SECP256R1) {
             ret = 0;
         }
     }
@@ -26426,6 +26473,21 @@ static int test_wc_EccPrivateKeyToDer (void)
         if (ret == 0) {
             ret = wc_EccPrivateKeyToDer(&eccKey, output, inLen);
             if (ret > 0) {
+        #if defined(OPENSSL_EXTRA) && defined(HAVE_ALL_CURVES)
+                /* test importing private only into a PKEY struct */
+                EC_KEY*   ec;
+                EVP_PKEY* pkey;
+                const unsigned char* der = output;
+
+                pkey = d2i_PrivateKey(EVP_PKEY_EC, NULL, &der, ret);
+                AssertNotNull(pkey);
+
+                der = output;
+                ec  = d2i_ECPrivateKey(NULL, &der, ret);
+                AssertNotNull(ec);
+                AssertIntEQ(EVP_PKEY_assign_EC_KEY(pkey, ec), SSL_SUCCESS);
+                EVP_PKEY_free(pkey); /* EC_KEY should be free'd by free'ing pkey */
+        #endif
                 ret = 0;
             }
         }
@@ -30522,7 +30584,7 @@ static void test_wc_GetPubKeyDerFromCert(void)
         XFCLOSE(fp);
 
         wc_InitDecodedCert(&decoded, certBuf, certBufSz, NULL);
-        ret = wc_ParseCert(&decoded, CERTREQ_TYPE, NO_VERIFY, NULL);
+        ret = wc_ParseCert(&decoded, CERTREQ_TYPE, VERIFY, NULL);
         AssertIntEQ(ret, 0);
 
         /* good test case - RSA DER certificate request */
@@ -47011,6 +47073,11 @@ static void test_wc_ParseCert(void)
 
     wc_InitDecodedCert(&decodedCert, rawCert, rawCertSize, NULL);
     AssertIntEQ(wc_ParseCert(&decodedCert, CERT_TYPE, NO_VERIFY, NULL), 0);
+#ifndef IGNORE_NAME_CONSTRAINTS
+    /* check that the subjects emailAddress was not put in the alt name list */
+    AssertNotNull(decodedCert.subjectEmail);
+    AssertNull(decodedCert.altEmailNames);
+#endif
     wc_FreeDecodedCert(&decodedCert);
 
     printf(resultFmt, passed);
@@ -47303,7 +47370,7 @@ static void test_wolfSSL_EVP_PKEY_encrypt(void)
 }
 static void test_wolfSSL_EVP_PKEY_sign_verify(void)
 {
-#if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
+#if defined(OPENSSL_EXTRA)
 #if !defined (NO_DSA) && !defined(HAVE_SELFTEST) && defined(WOLFSSL_KEY_GEN)
     WOLFSSL_DSA* dsa = NULL;
 #endif /* !NO_DSA && !HAVE_SELFTEST && WOLFSSL_KEY_GEN */
@@ -47498,7 +47565,7 @@ static void test_wolfSSL_EVP_PKEY_sign_verify(void)
     XFREE(sig, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER);
     XFREE(sigVerify, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER);
     printf(resultFmt, passed);
-#endif /* OPENSSL_EXTRA || OPENSSL_EXTRA_X509_SMALL */
+#endif /* OPENSSL_EXTRA */
 }
 
 static void test_EVP_PKEY_rsa(void)
@@ -55480,6 +55547,100 @@ static void test_wolfSSL_FIPS_mode(void)
 #endif
 }
 
+#ifdef WOLFSSL_DTLS
+
+/* Prints out the current window */
+static void DUW_TEST_print_window_binary(word32 h, word32 l, word32* w) {
+#ifdef WOLFSSL_DEBUG_DTLS_WINDOW
+    int i;
+    for (i = WOLFSSL_DTLS_WINDOW_WORDS - 1; i >= 0; i--) {
+        word32 b = w[i];
+        int j;
+        /* Prints out a 32 bit binary number in big endian order */
+        for (j = 0; j < 32; j++, b <<= 1) {
+            if (b & (((word32)1) << 31))
+                printf("1");
+            else
+                printf("0");
+        }
+        printf(" ");
+    }
+    printf("cur_hi %u cur_lo %u\n", h, l);
+#else
+    (void)h;
+    (void)l;
+    (void)w;
+#endif
+}
+
+/* a - cur_hi
+ * b - cur_lo
+ * c - next_hi
+ * d - next_lo
+ * e - window
+ * f - expected next_hi
+ * g - expected next_lo
+ * h - expected window[1]
+ * i - expected window[0]
+ */
+#define DUW_TEST(a,b,c,d,e,f,g,h,i) do { \
+    wolfSSL_DtlsUpdateWindow((a), (b), &(c), &(d), (e)); \
+    DUW_TEST_print_window_binary((a), (b), (e)); \
+    AssertIntEQ((c), (f)); \
+    AssertIntEQ((d), (g)); \
+    AssertIntEQ((e)[1], (h)); \
+    AssertIntEQ((e)[0], (i)); \
+} while (0)
+
+static void test_wolfSSL_DtlsUpdateWindow(void)
+{
+    word32 window[WOLFSSL_DTLS_WINDOW_WORDS];
+    word32 next_lo = 0;
+    word16 next_hi = 0;
+
+    printf(testingFmt, "wolfSSL_DtlsUpdateWindow()");
+#ifdef WOLFSSL_DEBUG_DTLS_WINDOW
+    printf("\n");
+#endif
+
+    XMEMSET(window, 0, sizeof window);
+    DUW_TEST(0, 0, next_hi, next_lo, window, 0, 1, 0, 0x01);
+    DUW_TEST(0, 1, next_hi, next_lo, window, 0, 2, 0, 0x03);
+    DUW_TEST(0, 5, next_hi, next_lo, window, 0, 6, 0, 0x31);
+    DUW_TEST(0, 4, next_hi, next_lo, window, 0, 6, 0, 0x33);
+    DUW_TEST(0, 100, next_hi, next_lo, window, 0, 101, 0, 0x01);
+    DUW_TEST(0, 101, next_hi, next_lo, window, 0, 102, 0, 0x03);
+    DUW_TEST(0, 133, next_hi, next_lo, window, 0, 134, 0x03, 0x01);
+    DUW_TEST(0, 200, next_hi, next_lo, window, 0, 201, 0, 0x01);
+    DUW_TEST(0, 264, next_hi, next_lo, window, 0, 265, 0, 0x01);
+    DUW_TEST(0, 0xFFFFFFFF, next_hi, next_lo, window, 1, 0, 0, 0x01);
+    DUW_TEST(0, 0xFFFFFFFD, next_hi, next_lo, window, 1, 0, 0, 0x05);
+    DUW_TEST(0, 0xFFFFFFFE, next_hi, next_lo, window, 1, 0, 0, 0x07);
+    DUW_TEST(1, 3, next_hi, next_lo, window, 1, 4, 0, 0x71);
+    DUW_TEST(1, 0, next_hi, next_lo, window, 1, 4, 0, 0x79);
+    DUW_TEST(1, 0xFFFFFFFF, next_hi, next_lo, window, 2, 0, 0, 0x01);
+    DUW_TEST(2, 3, next_hi, next_lo, window, 2, 4, 0, 0x11);
+    DUW_TEST(2, 0, next_hi, next_lo, window, 2, 4, 0, 0x19);
+    DUW_TEST(2, 25, next_hi, next_lo, window, 2, 26, 0, 0x6400001);
+    DUW_TEST(2, 27, next_hi, next_lo, window, 2, 28, 0, 0x19000005);
+    DUW_TEST(2, 29, next_hi, next_lo, window, 2, 30, 0, 0x64000015);
+    DUW_TEST(2, 33, next_hi, next_lo, window, 2, 34, 6, 0x40000151);
+    DUW_TEST(2, 60, next_hi, next_lo, window, 2, 61, 0x3200000A, 0x88000001);
+    DUW_TEST(1, 0xFFFFFFF0, next_hi, next_lo, window, 2, 61, 0x3200000A, 0x88000001);
+    DUW_TEST(2, 0xFFFFFFFD, next_hi, next_lo, window, 2, 0xFFFFFFFE, 0, 0x01);
+    DUW_TEST(3, 1, next_hi, next_lo, window, 3, 2, 0, 0x11);
+    DUW_TEST(99, 66, next_hi, next_lo, window, 99, 67, 0, 0x01);
+    DUW_TEST(50, 66, next_hi, next_lo, window, 99, 67, 0, 0x01);
+    DUW_TEST(100, 68, next_hi, next_lo, window, 100, 69, 0, 0x01);
+    DUW_TEST(99, 50, next_hi, next_lo, window, 100, 69, 0, 0x01);
+    DUW_TEST(99, 0xFFFFFFFF, next_hi, next_lo, window, 100, 69, 0, 0x01);
+    DUW_TEST(150, 0xFFFFFFFF, next_hi, next_lo, window, 151, 0, 0, 0x01);
+    DUW_TEST(152, 0xFFFFFFFF, next_hi, next_lo, window, 153, 0, 0, 0x01);
+
+    printf(resultFmt, passed);
+}
+#endif /* WOLFSSL_DTLS */
+
 /*----------------------------------------------------------------------------*
  | Main
  *----------------------------------------------------------------------------*/
@@ -55524,6 +55685,7 @@ void ApiTest(void)
     test_wolfSSL_CertManagerNameConstraint3();
     test_wolfSSL_CertManagerNameConstraint4();
     test_wolfSSL_CertManagerNameConstraint5();
+    test_wolfSSL_FPKI();
     test_wolfSSL_CertManagerCRL();
     test_wolfSSL_CTX_load_verify_locations_ex();
     test_wolfSSL_CTX_load_verify_buffer_ex();
@@ -56368,6 +56530,9 @@ void ApiTest(void)
     test_wc_CryptoCb();
     test_wolfSSL_CTX_StaticMemory();
     test_wolfSSL_FIPS_mode();
+#ifdef WOLFSSL_DTLS
+    test_wolfSSL_DtlsUpdateWindow();
+#endif
 
     AssertIntEQ(test_ForceZero(), 0);
 

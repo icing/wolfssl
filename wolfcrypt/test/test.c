@@ -413,7 +413,9 @@ WOLFSSL_TEST_SUBROUTINE int  hmac_sha3_test(void);
 static int  hkdf_test(void);
 #endif
 WOLFSSL_TEST_SUBROUTINE int  sshkdf_test(void);
+#ifdef WOLFSSL_TLS13
 WOLFSSL_TEST_SUBROUTINE int  tls13_kdf_test(void);
+#endif
 WOLFSSL_TEST_SUBROUTINE int  x963kdf_test(void);
 WOLFSSL_TEST_SUBROUTINE int  arc4_test(void);
 #ifdef WC_RC2
@@ -621,7 +623,8 @@ static void myFipsCb(int ok, int err, const char* hash)
         static byte gTestMemory[14000];
     #elif defined(WOLFSSL_CERT_EXT)
         static byte gTestMemory[140000];
-    #elif defined(USE_FAST_MATH) && !defined(ALT_ECC_SIZE)
+    #elif (defined(WOLFSSL_SP_MATH_ALL) || defined(USE_FAST_MATH)) && \
+          !defined(ALT_ECC_SIZE)
         static byte gTestMemory[160000];
     #else
         static byte gTestMemory[80000];
@@ -11992,7 +11995,7 @@ WOLFSSL_TEST_SUBROUTINE int memory_test(void)
         static const char* certDerFile = CERT_WRITE_TEMP_DIR "cert.der";
         static const char* otherCertPemFile = CERT_WRITE_TEMP_DIR "othercert.pem";
         static const char* certPemFile = CERT_WRITE_TEMP_DIR "cert.pem";
-        #if defined(WOLFSSL_CERT_REQ) && defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_NO_MALLOC)
+        #if defined(WOLFSSL_CERT_REQ) && !defined(WOLFSSL_NO_MALLOC)
             static const char* certReqDerFile = CERT_WRITE_TEMP_DIR "certreq.der";
             static const char* certReqPemFile = CERT_WRITE_TEMP_DIR "certreq.pem";
         #endif
@@ -15556,10 +15559,13 @@ WOLFSSL_TEST_SUBROUTINE int rsa_test(void)
         goto exit_rsa;
 #endif
 
-#if defined(WOLFSSL_CERT_REQ) && defined(WOLFSSL_SMALL_STACK) && !defined(WOLFSSL_NO_MALLOC)
+#if defined(WOLFSSL_CERT_REQ) && !defined(WOLFSSL_NO_MALLOC)
     {
         Cert        *req;
         int         derSz;
+#ifndef WOLFSSL_SMALL_STACK
+        byte*  der = NULL;
+#endif
 
         req = (Cert *)XMALLOC(sizeof *req, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER);
         if (! req)
@@ -15651,6 +15657,13 @@ WOLFSSL_TEST_SUBROUTINE int rsa_test(void)
         derSz = wc_MakeCertReq_ex(req, der, FOURK_BUF, RSA_TYPE, key);
         if (derSz < 0) {
             ERROR_OUT(-7974, exit_rsa);
+        }
+
+        /* Test getting the size of the buffer without providing the buffer.
+         * derSz is set to the "largest buffer" we are willing to allocate. */
+        derSz = wc_MakeCertReq(req, NULL, 10000, key, NULL);
+        if (derSz < 0) {
+            ERROR_OUT(-7975, exit_rsa);
         }
 
         XFREE(der, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER);
@@ -16286,7 +16299,7 @@ static int dh_ffdhe_test(WC_RNG *rng, int name)
         ERROR_OUT(-8059, done);
     }
 
-#if defined(WOLFSSL_HAVE_SP_DH) && defined(USE_FAST_MATH)
+#if defined(WOLFSSL_HAVE_SP_DH) || defined(USE_FAST_MATH)
     /* Make p even */
     key->p.dp[0] &= (mp_digit)-2;
     if (ret != 0) {
@@ -16310,7 +16323,8 @@ static int dh_ffdhe_test(WC_RNG *rng, int name)
     }
 
     ret = wc_DhCheckKeyPair(key, pub, pubSz, priv, privSz);
-    if (ret != MP_VAL && ret != MP_EXPTMOD_E && ret != ASYNC_OP_E) {
+    if (ret != MP_VAL && ret != MP_EXPTMOD_E && ret != MP_CMP_E &&
+            ret != ASYNC_OP_E) {
         ERROR_OUT(-8057, done);
     }
 
@@ -21000,7 +21014,7 @@ const char resMasterLabel[] = "res master";
 const char derivedLabel[] = "derived";
 
 
-int tls13_kdf_test(void)
+WOLFSSL_TEST_SUBROUTINE int tls13_kdf_test(void)
 {
     int ret = 0;
     word32 i;
@@ -22556,6 +22570,17 @@ static int ecc_test_key_gen(WC_RNG* rng, int keySize)
     if (derSz == 0) {
         ERROR_OUT(-9890, done);
     }
+
+#ifdef HAVE_COMP_KEY
+    /* test export of compressed public key */
+    derSz = wc_EccPublicKeyToDer_ex(userA, der, ECC_BUFSIZE, 1, 1);
+    if (derSz < 0) {
+        ERROR_OUT(derSz, done);
+    }
+    if (derSz == 0) {
+        ERROR_OUT(-9890, done);
+    }
+#endif
 
     ret = SaveDerAndPem(der, derSz, eccPubKeyDerFile, NULL, 0, -8348);
     if (ret != 0) {
@@ -27348,7 +27373,7 @@ WOLFSSL_TEST_SUBROUTINE int ed25519_test(void)
         if (wc_ed25519_export_public(&key, exportPKey, &exportPSz) != 0)
             return -11051 - i;
 
-        if (wc_ed25519_import_public(exportPKey, exportPSz, &key2) != 0)
+        if (wc_ed25519_import_public_ex(exportPKey, exportPSz, &key2, 1) != 0)
             return -11061 - i;
 
         if (wc_ed25519_export_private_only(&key, exportSKey, &exportSSz) != 0)
@@ -28811,7 +28836,7 @@ WOLFSSL_TEST_SUBROUTINE int ed448_test(void)
                     break;
                 }
 
-                if (wc_ed448_import_public(exportPKey, exportPSz, key2) != 0) {
+                if (wc_ed448_import_public_ex(exportPKey, exportPSz, key2, 1) != 0) {
                     ret = -11761 - i;
                     break;
                 }
@@ -30385,7 +30410,7 @@ static int sakke_api_test(WC_RNG* rng, SakkeKey* key, ecc_point* rsk)
 
 static int sakke_kat_derive_test(SakkeKey* key, ecc_point* rsk)
 {
-    static const byte pubData[] = {
+    WOLFSSL_SMALL_STACK_STATIC const byte pubData[] = {
         0x59, 0x58, 0xEF, 0x1B, 0x16, 0x79, 0xBF, 0x09,
         0x9B, 0x3A, 0x03, 0x0D, 0xF2, 0x55, 0xAA, 0x6A,
         0x23, 0xC1, 0xD8, 0xF1, 0x43, 0xD4, 0xD2, 0x3F,
@@ -30419,7 +30444,7 @@ static int sakke_kat_derive_test(SakkeKey* key, ecc_point* rsk)
         0xB5, 0x8B, 0x7C, 0xC7, 0x96, 0xE2, 0x4E, 0x9A,
         0x39, 0x40, 0x95, 0x75, 0x4F, 0x5F, 0x8B, 0xAE
     };
-    static const byte rskData[] = {
+    WOLFSSL_SMALL_STACK_STATIC const byte rskData[] = {
         0x93, 0xAF, 0x67, 0xE5, 0x00, 0x7B, 0xA6, 0xE6,
         0xA8, 0x0D, 0xA7, 0x93, 0xDA, 0x30, 0x0F, 0xA4,
         0xB5, 0x2D, 0x0A, 0x74, 0xE2, 0x5E, 0x6E, 0x7B,
@@ -30454,17 +30479,17 @@ static int sakke_kat_derive_test(SakkeKey* key, ecc_point* rsk)
         0x33, 0x21, 0x51, 0x23, 0x5D, 0xEC, 0xB0, 0xF5
 
     };
-    static const byte id[] = {
+    WOLFSSL_SMALL_STACK_STATIC const byte id[] = {
         0x32, 0x30, 0x31, 0x31, 0x2D, 0x30, 0x32, 0x00,
         0x74, 0x65, 0x6C, 0x3A, 0x2B, 0x34, 0x34, 0x37,
         0x37, 0x30, 0x30, 0x39, 0x30, 0x30, 0x31, 0x32,
         0x33, 0x00
     };
-    static const byte ssv[] = {
+    WOLFSSL_SMALL_STACK_STATIC const byte ssv[] = {
         0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
         0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0
     };
-    static const byte auth[] = {
+    WOLFSSL_SMALL_STACK_STATIC const byte auth[] = {
         0x04,
         0x44, 0xE8, 0xAD, 0x44, 0xAB, 0x85, 0x92, 0xA6,
         0xA5, 0xA3, 0xDD, 0xCA, 0x5C, 0xF8, 0x96, 0xC7,
@@ -30499,7 +30524,7 @@ static int sakke_kat_derive_test(SakkeKey* key, ecc_point* rsk)
         0xC5, 0xE2, 0x75, 0x74, 0xB0, 0x77, 0x39, 0xB3,
         0x4B, 0xE7, 0x4A, 0x53, 0x2F, 0x74, 0x7B, 0x86
     };
-    byte encSsv[] = {
+    WOLFSSL_SMALL_STACK_STATIC const byte encSsv[] = {
         0x89, 0xE0, 0xBC, 0x66, 0x1A, 0xA1, 0xE9, 0x16,
         0x38, 0xE6, 0xAC, 0xC8, 0x4E, 0x49, 0x65, 0x07
     };
@@ -38191,7 +38216,10 @@ static int mp_test_mont(mp_int* a, mp_int* m, mp_int* n, mp_int* r, WC_RNG* rng)
                                0x1f, 0x13d,  0x45, 0x615
 #endif
                             };
-    int bits[] = { 256, 384, 2048,
+    int bits[] = { 256, 384,
+#if defined(SP_INT_MAX_BITS) && SP_INT_MAX_BITS > 4096
+                   2048,
+#endif
 #if defined(SP_INT_MAX_BITS) && SP_INT_MAX_BITS > 6144
                    3072
 #endif
