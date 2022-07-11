@@ -386,6 +386,7 @@ static int test_quic_crypt(void) {
 }
 
 typedef struct {
+    const char *name;
     WOLFSSL *ssl;
     byte output[128*1024];
     size_t output_len;
@@ -414,11 +415,12 @@ static WOLFSSL_QUIC_METHOD ctx_method = {
     ctx_send_alert,
 };
 
-static void QuicTestContext_init(QuicTestContext *tctx, WOLFSSL *ssl)
+static void QuicTestContext_init(QuicTestContext *tctx, WOLFSSL *ssl, const char *name)
 {
     AssertNotNull(tctx);
     AssertNotNull(ssl);
     memset(tctx, 0, sizeof(*tctx));
+    tctx->name = name;
     tctx->ssl = ssl;
     wolfSSL_set_app_data(ssl, tctx);
     AssertTrue(wolfSSL_set_quic_method(ssl, &ctx_method) == WOLFSSL_SUCCESS);
@@ -454,7 +456,7 @@ static int ctx_add_handshake_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
     WOLFSSL_ENTER("ctx_add_handshake_data");
     AssertNotNull(ctx);
     ctx->output_level = level;
-    fprintf(stderr, "handshake[enc_level=%d]: %lu bytes", level, len);
+    fprintf(stderr, "[%s] add_handshake[enc_level=%d]: %lu bytes\n", ctx->name, level, len);
     if (/*disables code*/(0)) {
         dump_buffer("add", data, len);
     }
@@ -480,7 +482,7 @@ static int ctx_send_alert(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level, uint8_t 
 {
     QuicTestContext *ctx = wolfSSL_get_app_data(ssl);
 
-    printf("ctx_send_alert: level=%d, alert=%d", level, alert);
+    printf("[%s] send_alert: level=%d, alert=%d\n", ctx->name, level, alert);
     AssertNotNull(ctx);
     ctx->alert_level = level;
     ctx->alert = alert;
@@ -630,7 +632,7 @@ static int test_quic_client_hello(void) {
 
     printf("   quic client_hello(no tp set)");
     AssertNotNull(ssl = wolfSSL_new(ctx));
-    QuicTestContext_init(&tctx, ssl);
+    QuicTestContext_init(&tctx, ssl, "client");
     AssertTrue(wolfSSL_connect(ssl) != 0);
     /* Since we have not set any QUIC transport params, and they are
      * mandatory, this needs to fail */
@@ -641,7 +643,7 @@ static int test_quic_client_hello(void) {
     /* Set transport params, expect both extensions */
     printf("   quic client_hello(tp set)");
     AssertNotNull(ssl = wolfSSL_new(ctx));
-    QuicTestContext_init(&tctx, ssl);
+    QuicTestContext_init(&tctx, ssl, "client");
     wolfSSL_set_quic_transport_params(ssl, tp_params, sizeof(tp_params));
     AssertTrue(wolfSSL_connect(ssl) != 0);
     AssertIntEQ(wolfSSL_get_error(ssl, 0), SSL_ERROR_WANT_READ);
@@ -652,7 +654,7 @@ static int test_quic_client_hello(void) {
     /* Set transport params v1, expect v1 extension */
     printf("   quic client_hello(tp set v1)");
     AssertNotNull(ssl = wolfSSL_new(ctx));
-    QuicTestContext_init(&tctx, ssl);
+    QuicTestContext_init(&tctx, ssl, "client");
     wolfSSL_set_quic_transport_version(ssl, TLSX_KEY_QUIC_TP_PARAMS);
     wolfSSL_set_quic_transport_params(ssl, tp_params, sizeof(tp_params));
     AssertTrue(wolfSSL_connect(ssl) != 0);
@@ -663,7 +665,7 @@ static int test_quic_client_hello(void) {
     /* Set transport params draft, expect draft extension */
     printf("   quic client_hello(tp set draft)");
     AssertNotNull(ssl = wolfSSL_new(ctx));
-    QuicTestContext_init(&tctx, ssl);
+    QuicTestContext_init(&tctx, ssl, "client");
     wolfSSL_set_quic_transport_version(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT);
     wolfSSL_set_quic_transport_params(ssl, tp_params, sizeof(tp_params));
     AssertTrue(wolfSSL_connect(ssl) != 0);
@@ -674,7 +676,7 @@ static int test_quic_client_hello(void) {
     /* Set transport params 0, expect both extension */
     printf("   quic client_hello(tp set both)");
     AssertNotNull(ssl = wolfSSL_new(ctx));
-    QuicTestContext_init(&tctx, ssl);
+    QuicTestContext_init(&tctx, ssl, "client");
     wolfSSL_set_quic_transport_version(ssl, 0);
     wolfSSL_set_quic_transport_params(ssl, tp_params, sizeof(tp_params));
     AssertTrue(wolfSSL_connect(ssl) != 0);
@@ -726,13 +728,17 @@ static void check_quic_server_hello(const byte *data, size_t data_len,
                ext_sup_version, sizeof(ext_sup_version));
 }
 
-static void QuicTestContext_forward(QuicTestContext *from, QuicTestContext *to, int level)
+static void QuicTestContext_forward(QuicTestContext *from, QuicTestContext *to)
 {
     int ret;
 
-    ret = wolfSSL_provide_quic_data(to->ssl, level, from->output, from->output_len);
-    from->output_len = 0;
-    AssertIntEQ(ret, WOLFSSL_SUCCESS);
+    if (from->output_len > 0) {
+        printf("[%s -> %s] forward %lu bytes at level %d\n",
+               from->name, to->name, from->output_len, from->output_level);
+        ret = wolfSSL_provide_quic_data(to->ssl, from->output_level, from->output, from->output_len);
+        from->output_len = 0;
+        AssertIntEQ(ret, WOLFSSL_SUCCESS);
+    }
 }
 
 static int test_quic_server_hello(void) {
@@ -751,7 +757,7 @@ static int test_quic_server_hello(void) {
 
     /* setup client ssl */
     AssertNotNull(ssl_c = wolfSSL_new(ctx_c));
-    QuicTestContext_init(&tctx_c, ssl_c);
+    QuicTestContext_init(&tctx_c, ssl_c, "client");
     wolfSSL_set_quic_transport_version(ssl_c, 0);
     wolfSSL_set_quic_transport_params(ssl_c, tp_params_c, sizeof(tp_params_c));
     /* connect */
@@ -761,11 +767,11 @@ static int test_quic_server_hello(void) {
 
     /* setup server ssl */
     AssertNotNull(ssl_s = wolfSSL_new(ctx_s));
-    QuicTestContext_init(&tctx_s, ssl_s);
+    QuicTestContext_init(&tctx_s, ssl_s, "server");
     wolfSSL_set_quic_transport_version(ssl_s, 0);
     wolfSSL_set_quic_transport_params(ssl_s, tp_params_s, sizeof(tp_params_s));
     /* provide server the client_hello */
-    QuicTestContext_forward(&tctx_c, &tctx_s, wolfssl_encryption_initial);
+    QuicTestContext_forward(&tctx_c, &tctx_s);
     AssertTrue(wolfSSL_accept(ssl_s) != WOLFSSL_SUCCESS);
     AssertIntEQ(SSL_ERROR_WANT_READ, wolfSSL_get_error(ssl_s, 0));
     /* check output */
@@ -775,19 +781,37 @@ static int test_quic_server_hello(void) {
     check_secrets(&tctx_s, wolfssl_encryption_application, 32, 32);
     check_secrets(&tctx_c, wolfssl_encryption_handshake, 0, 0);
     /* feed the server data to the client */
-    QuicTestContext_forward(&tctx_s, &tctx_c, wolfssl_encryption_handshake);
+    QuicTestContext_forward(&tctx_s, &tctx_c);
     AssertIntEQ(wolfSSL_connect(ssl_c), WOLFSSL_SUCCESS);
     AssertIntEQ(SSL_ERROR_WANT_READ, wolfSSL_get_error(ssl_s, 0));
     /* client has generated handshake secret */
     check_secrets(&tctx_c, wolfssl_encryption_handshake, 32, 32);
-    /* client should have produced something */
-    AssertTrue(tctx_c.output_len > 0);
-    /* feed the client data to server to complete the handshake */
-    QuicTestContext_forward(&tctx_c, &tctx_s, wolfssl_encryption_handshake);
-    AssertIntEQ(wolfSSL_accept(ssl_s), WOLFSSL_SUCCESS);
-    AssertIntEQ(0, wolfSSL_get_error(ssl_s, 0));
-
-    /* No data is pending */
+    /* continue the handshake till done */
+    while (1) {
+        int n;
+        if (tctx_s.output_len > 0) {
+            QuicTestContext_forward(&tctx_s, &tctx_c);
+            n = wolfSSL_connect(ssl_c);
+            if (n != WOLFSSL_SUCCESS) {
+                AssertIntEQ(wolfSSL_get_error(ssl_c, 0), SSL_ERROR_WANT_READ);
+            }
+        }
+        else if (tctx_c.output_len > 0) {
+            QuicTestContext_forward(&tctx_c, &tctx_s);
+            n = wolfSSL_accept(ssl_s);
+            if (n != WOLFSSL_SUCCESS) {
+                AssertIntEQ(wolfSSL_get_error(ssl_s, 0), SSL_ERROR_WANT_READ);
+            }
+        }
+        else {
+            if (wolfSSL_get_error(ssl_s, 0) == 0
+                && wolfSSL_get_error(ssl_c, 0) == 0) {
+                break;  /* handshake done */
+            }
+            AssertNull("Neither client nor server have anything to send, "
+                "but handshake has not concluded");
+        }
+    }
     AssertIntEQ(tctx_c.output_len, 0);
     AssertIntEQ(tctx_s.output_len, 0);
     /* we are at application encryption level */

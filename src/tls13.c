@@ -4182,6 +4182,10 @@ int DoTls13ServerHello(WOLFSSL* ssl, const byte* input, word32* inOutIdx,
 
         ssl->keys.encryptionOn = 1;
         ssl->options.serverState = SERVER_HELLO_COMPLETE;
+        if (WOLFSSL_IS_QUIC(ssl)) {
+            ssl->quic.enc_level_write = wolfssl_encryption_handshake;
+            ssl->quic.enc_level_read = wolfssl_encryption_handshake;
+        }
     }
     else {
         ssl->options.tls1_3 = 1;

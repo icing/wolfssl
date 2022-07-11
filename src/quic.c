@@ -857,6 +857,7 @@ const WOLFSSL_EVP_MD *wolfSSL_quic_get_md(WOLFSSL *ssl)
     }
 }
 
+#ifdef OPENSSL_EXTRA
 
 int wolfSSL_quic_hkdf_extract(uint8_t *dest, const WOLFSSL_EVP_MD *md,
                               const uint8_t *secret, size_t secretlen,
@@ -868,7 +869,7 @@ int wolfSSL_quic_hkdf_extract(uint8_t *dest, const WOLFSSL_EVP_MD *md,
 
     WOLFSSL_ENTER("wolfSSL_quic_hkdf_extract");
 
-    pctx = wolfSSL_EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+    pctx = wolfSSL_EVP_PKEY_CTX_new_id(NID_hkdf, NULL);
     if (pctx == NULL) {
         ret = WOLFSSL_FAILURE;
         goto cleanup;
@@ -886,7 +887,7 @@ int wolfSSL_quic_hkdf_extract(uint8_t *dest, const WOLFSSL_EVP_MD *md,
 
 cleanup:
     if (pctx)
-        EVP_PKEY_CTX_free(pctx);
+        wolfSSL_EVP_PKEY_CTX_free(pctx);
     WOLFSSL_LEAVE("wolfSSL_quic_hkdf_extract", ret);
     return ret;
 }
@@ -902,7 +903,7 @@ int wolfSSL_quic_hkdf_expand(uint8_t *dest, size_t destlen,
 
     WOLFSSL_ENTER("wolfSSL_quic_hkdf_expand");
 
-    pctx = wolfSSL_EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+    pctx = wolfSSL_EVP_PKEY_CTX_new_id(NID_hkdf, NULL);
     if (pctx == NULL) {
         ret = WOLFSSL_FAILURE;
         goto cleanup;
@@ -938,7 +939,7 @@ int wolfSSL_quic_hkdf(uint8_t *dest, size_t destlen,
 
     WOLFSSL_ENTER("wolfSSL_quic_hkdf");
 
-    pctx = wolfSSL_EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+    pctx = wolfSSL_EVP_PKEY_CTX_new_id(NID_hkdf, NULL);
     if (pctx == NULL) {
         ret = WOLFSSL_FAILURE;
         goto cleanup;
@@ -961,6 +962,9 @@ cleanup:
     WOLFSSL_LEAVE("wolfSSL_quic_hkdf", ret);
     return ret;
 }
+
+#endif /* OPENSSL_EXTRA */
+
 
 WOLFSSL_EVP_CIPHER_CTX *wolfSSL_quic_crypt_new(const WOLFSSL_EVP_CIPHER *cipher,
                                                const uint8_t *key, const uint8_t *iv,

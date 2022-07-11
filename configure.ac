@@ -1033,6 +1033,25 @@ then
     ENABLED_TLS13="no"
 fi
 
+# QUIC support
+AC_ARG_ENABLE([quic],
+    [AS_HELP_STRING([--enable-quic],[Enable QUIC API with wolfSSL TLS v1.3 (default: disabled)])],
+    [ ENABLED_QUIC=$enableval ],
+    [ ENABLED_QUIC=no ]
+    )
+
+if test "$ENABLED_QUIC" = "yes"
+then
+    if test "x$ENABLED_TLS13" = "xno"
+    then
+        AC_MSG_ERROR([TLS 1.3 is disabled - necessary for QUIC])
+    fi
+    AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_QUIC"
+    # QUIC proto handlers need app_data at WOLFSSL*
+    AM_CFLAGS="$AM_CFLAGS -DHAVE_EX_DATA"
+fi
+
+
 # Post-handshake Authentication
 AC_ARG_ENABLE([postauth],
     [AS_HELP_STRING([--enable-postauth],[Enable wolfSSL Post-handshake Authentication (default: disabled)])],
@@ -1472,6 +1491,12 @@ AC_ARG_ENABLE([opensslextra],
     [ ENABLED_OPENSSLEXTRA=$enableval ],
     [ ENABLED_OPENSSLEXTRA=no ]
     )
+
+if test "$ENABLED_QUIC" = "yes"
+then
+    ENABLED_OPENSSLEXTRA="yes"
+fi
+
 
 # One Error Queue per Thread
 AC_ARG_ENABLE([error-queue-per-thread],
@@ -4824,32 +4849,6 @@ if test "$ENABLED_TLSV12" = "no" && test "$ENABLED_TLS13" = "yes" && test "x$ENA
 then
     AM_CFLAGS="$AM_CFLAGS -DNO_SESSION_CACHE"
 fi
-
-# QUIC support
-AC_ARG_ENABLE([quic],
-    [AS_HELP_STRING([--enable-quic],[Enable QUIC API with wolfSSL TLS v1.3 (default: disabled)])],
-    [ ENABLED_QUIC=$enableval ],
-    [ ENABLED_QUIC=no ]
-    )
-
-if test "$ENABLED_QUIC" = "yes"
-then
-    if test "x$ENABLED_TLS13" = "xno" && test "X$ENABLED_ALL" = "xno"
-    then
-        AC_MSG_ERROR([cannot enable quic without enabling tls13.])
-    fi
-    if test "x$ENABLED_TLS13" = "xyes"
-    then
-        AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_QUIC -DHAVE_EX_DATA"
-    fi
-    # Requires aesctr
-    if test "x$ENABLED_AESCTR" = "xno"
-    then
-        ENABLED_AESCTR="yes"
-    fi
-
-fi
-
 
 # PKCS7
 AC_ARG_ENABLE([pkcs7],

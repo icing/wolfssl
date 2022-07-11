@@ -26,6 +26,10 @@
 #ifndef WOLFSSL_QUIC_H
 #define WOLFSSL_QUIC_H
 
+#ifdef __cplusplus
+    extern "C" {
+#endif
+
 #ifdef WOLFSSL_QUIC
 
 /* QUIC operates on three encryption levels which determine
@@ -255,6 +259,10 @@ int wolfSSL_quic_hkdf(uint8_t *dest, size_t destlen,
                       const uint8_t *salt, size_t saltlen,
                       const uint8_t *info, size_t infolen);
 
-
 #endif /* WOLFSSL_QUIC */
+
+#ifdef __cplusplus
+    }  /* extern "C" */
+#endif
+
 #endif /* WOLFSSL_QUIC_H */
