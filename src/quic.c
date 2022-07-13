@@ -434,14 +434,41 @@ int wolfSSL_quic_add_transport_extensions(WOLFSSL *ssl, int msg_type)
     if (ssl->quic.transport_local == NULL) {
         return QUIC_TP_MISSING_E;
     }
-    else if (ssl->quic.transport_version == 0) {
-        /* not being set to a particular id, we send both draft+v1 */
-        ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, is_resp)
-            || TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, is_resp);
+
+    if (is_resp) {
+        /* server repsonse: time to decide which version to use */
+        if (ssl->quic.transport_peer && ssl->quic.transport_peer_draft) {
+            if (ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS_DRAFT) {
+                ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, is_resp);
+            }
+            else {
+                ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, is_resp);
+            }
+        }
+        else {
+            if (ssl->quic.transport_version == TLSX_KEY_QUIC_TP_PARAMS_DRAFT
+                && ssl->quic.transport_peer_draft) {
+                ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, is_resp);
+            }
+            else if (ssl->quic.transport_peer) {
+                ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, is_resp);
+            }
+            else {
+                /* no match, send none, will let the client fail */
+            }
+        }
     }
     else {
-        /* otherwise, send the version configured */
-        ret = TLSX_QuicTP_Use(ssl, ssl->quic.transport_version, is_resp);
+        /* client hello */
+        if (ssl->quic.transport_version == 0) {
+            /* not being set to a particular id, we send both draft+v1 */
+            ret = TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS, is_resp)
+                || TLSX_QuicTP_Use(ssl, TLSX_KEY_QUIC_TP_PARAMS_DRAFT, is_resp);
+        }
+        else {
+            /* otherwise, send the version configured */
+            ret = TLSX_QuicTP_Use(ssl, ssl->quic.transport_version, is_resp);
+        }
     }
     return ret;
 }
@@ -506,7 +533,7 @@ void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled)
 
 int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl)
 {
-    int ret = WOLFSSL_SUCCESS;
+    int ret = WOLFSSL_SUCCESS, nret;
 
     WOLFSSL_ENTER("wolfSSL_process_quic_post_handshake");
 
@@ -523,7 +550,8 @@ int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl)
     }
 
     while (ssl->quic.input_head != NULL || ssl->buffers.inputBuffer.length > 0) {
-        if ((ret = ProcessReply(ssl)) != WOLFSSL_SUCCESS) {
+        if ((nret = ProcessReply(ssl)) < 0) {
+            ret = nret;
             goto cleanup;
         }
     }

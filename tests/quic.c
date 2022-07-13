@@ -511,15 +511,16 @@ static void check_handshake_record(const byte *data, size_t data_len, int rtype,
     *prlen = rlen + HANDSHAKE_HEADER_SZ;
 }
 
-static void ext_dump(const byte *data, size_t data_len)
+static void ext_dump(const char *name, const byte *data, size_t data_len)
 {
     size_t idx = 0;
     word16 len16, etype, i;
 
+    fprintf(stderr, "extensions in %s\n", name);
     while (idx < data_len) {
         ato16(&data[idx], &etype); /* extension type */
         ato16(&data[idx+2], &len16); /* extension length */
-        fprintf(stderr, "extension: %04x [", etype);
+        fprintf(stderr, "  extension: %04x [", etype);
         for (i = 0; i < len16; ++i) {
             fprintf(stderr, "%s0x%02x", (i? ", ": ""), data[idx+4+i]);
         }
@@ -593,8 +594,8 @@ static void check_quic_client_hello(const byte *data, size_t data_len,
     for (; idx < rec_len; ++idx) {
         AssertTrue(data[idx] == 0); /* padding */
     }
-    if (/*disables code*/(1)) {
-        ext_dump(exts, exts_len);
+    if (/*disables code*/(0)) {
+        ext_dump("ClientHello", exts, exts_len);
         dump_buffer("ClientHello", data, data_len);
     }
     ext_equals(exts, exts_len, TLSX_SUPPORTED_VERSIONS,
@@ -691,6 +692,24 @@ static int test_quic_client_hello(void) {
     return ret;
 }
 
+static void check_ee(const char *name, const byte *data, size_t data_len)
+{
+    size_t rec_len, exts_len, idx;
+    word16 len16;
+    const byte *exts;
+
+    check_handshake_record(data, data_len, encrypted_extensions, &rec_len);
+    idx = HANDSHAKE_HEADER_SZ;
+    ato16(&data[idx], &len16); /* extensions length */
+    AssertTrue(len16 > 0);
+    exts_len = len16;
+    idx += 2;
+    exts = &data[idx];
+    if (/*disables code*/(1)) {
+        ext_dump(name, exts, exts_len);
+    }
+}
+
 static void check_quic_server_hello(const byte *data, size_t data_len,
         size_t session_id_len)
 {
@@ -722,12 +741,16 @@ static void check_quic_server_hello(const byte *data, size_t data_len,
     for (; idx < rec_len; ++idx) {
         AssertTrue(data[idx] == 0); /* padding */
     }
-    if (/*disables code*/(0)) {
-        ext_dump(exts, exts_len);
+    if (/*disables code*/(1)) {
+        ext_dump("ServerHellO", exts, exts_len);
         dump_buffer("ServerHello", data, data_len);
     }
     ext_equals(exts, exts_len, TLSX_SUPPORTED_VERSIONS,
                ext_sup_version, sizeof(ext_sup_version));
+    if (rec_len < data_len) {
+        /* encrypted extensions? */
+        check_ee("EncryptedExtension", data + rec_len, data_len - rec_len);
+    }
 }
 
 static void QuicTestContext_forward(QuicTestContext *from, QuicTestContext *to)
@@ -843,7 +866,6 @@ static int test_quic_server_hello(void) {
     return ret;
 }
 #endif /* WOLFSSL_QUIC */
-
 
 int QuicTest(void)
 {
