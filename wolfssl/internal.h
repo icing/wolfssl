@@ -4927,8 +4927,10 @@ struct WOLFSSL {
     struct {
         const WOLFSSL_QUIC_METHOD *method;
         WOLFSSL_ENCRYPTION_LEVEL enc_level_read;
+        WOLFSSL_ENCRYPTION_LEVEL enc_level_read_next;
         WOLFSSL_ENCRYPTION_LEVEL enc_level_latest_recvd;
         WOLFSSL_ENCRYPTION_LEVEL enc_level_write;
+        WOLFSSL_ENCRYPTION_LEVEL enc_level_write_next;
         int transport_version;
         const QuicTransportParam *transport_local;
         const QuicTransportParam *transport_peer;
@@ -4936,8 +4938,11 @@ struct WOLFSSL {
         QuicRecord *input_head;          /* we own, data for handshake */
         QuicRecord *input_tail;          /* points to last element for append */
         QuicRecord *scratch;             /* we own, record construction */
-        size_t output_rec_remain;        /* how many bytes of output TLS record
+        word32 output_rec_remain;        /* how many bytes of output TLS record
                                           * content have not been handled yet by quic */
+        word32 output_sent_idx;          /* up to which position in the output buffer
+                                          * we already sent data - without modifying
+                                          * the buffer. */
     } quic;
 #endif /* WOLFSSL_QUIC */
 };
@@ -5584,8 +5589,9 @@ WOLFSSL_LOCAL void wolfSSL_quic_clear(WOLFSSL* ssl);
 WOLFSSL_LOCAL void wolfSSL_quic_free(WOLFSSL* ssl);
 WOLFSSL_LOCAL int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
                                                enum DeriveKeyType ktype,
-                                               enum encrypt_side side,
-                                               size_t secret_len);
+                                               enum encrypt_side side);
+WOLFSSL_LOCAL int wolfSSL_quic_keys_active(WOLFSSL* ssl, enum encrypt_side side);
+
 #else
 #define WOLFSSL_IS_QUIC(s) 0
 #endif /* WOLFSSL_QUIC (else) */

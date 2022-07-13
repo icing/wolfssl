@@ -1270,34 +1270,9 @@ int DeriveTls13Keys(WOLFSSL* ssl, int secret, int side, int store)
 
 #ifdef WOLFSSL_QUIC
     if (WOLFSSL_IS_QUIC(ssl)) {
-        size_t secret_len;
-
-        /* this is a bit "meh!" to determine this here again after
-         * the secrets have been generated. */
-        switch (ssl->specs.mac_algorithm) {
-        #ifndef NO_SHA256
-            case sha256_mac:
-                secret_len = WC_SHA256_DIGEST_SIZE;
-                break;
-        #endif
-        #ifdef WOLFSSL_SHA384
-            case sha384_mac:
-                secret_len = WC_SHA384_DIGEST_SIZE;
-                break;
-        #endif
-        #ifdef WOLFSSL_TLS13_SHA512
-            case sha512_mac:
-                secret_len = WC_SHA512_DIGEST_SIZE;
-                break;
-        #endif
-            default:
-                WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS unable to determine "
-                    "secret length from mac_algorithm");
-                ret = 1;
-                goto end;
-        }
-
-        return wolfSSL_quic_forward_secrets(ssl, secret, side, secret_len);
+        ret = wolfSSL_quic_forward_secrets(ssl, secret, side);
+        if (ret != 0)
+            goto end;
     }
 #endif /* WOLFSSL_QUIC */
 
@@ -4182,10 +4157,6 @@ int DoTls13ServerHello(WOLFSSL* ssl, const byte* input, word32* inOutIdx,
 
         ssl->keys.encryptionOn = 1;
         ssl->options.serverState = SERVER_HELLO_COMPLETE;
-        if (WOLFSSL_IS_QUIC(ssl)) {
-            ssl->quic.enc_level_write = wolfssl_encryption_handshake;
-            ssl->quic.enc_level_read = wolfssl_encryption_handshake;
-        }
     }
     else {
         ssl->options.tls1_3 = 1;
@@ -5859,7 +5830,6 @@ static int SendTls13EncryptedExtensions(WOLFSSL* ssl)
 #endif
 #ifdef WOLFSSL_QUIC
     if (IsAtLeastTLSv1_3(ssl->version) && WOLFSSL_IS_QUIC(ssl)) {
-        ssl->quic.enc_level_write = wolfssl_encryption_handshake;
         ret = wolfSSL_quic_add_transport_extensions(ssl, encrypted_extensions);
         if (ret != 0)
             return ret;
@@ -8244,12 +8214,6 @@ static int SendTls13Finished(WOLFSSL* ssl)
     if ((ret = SendBuffered(ssl)) != 0)
         return ret;
 
-#ifdef WOLFSSL_QUIC
-    if (WOLFSSL_IS_QUIC(ssl)) {
-        ssl->quic.enc_level_write = wolfssl_encryption_application;
-    }
-#endif
-
     WOLFSSL_LEAVE("SendTls13Finished", ret);
     WOLFSSL_END(WC_FUNC_FINISHED_SEND);
 
@@ -9586,11 +9550,6 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
 
                 }
 #endif /* WOLFSSL_DTLS13 */
-#ifdef WOLFSSL_QUIC
-                if (WOLFSSL_IS_QUIC(ssl)) {
-                    ssl->quic.enc_level_read = wolfssl_encryption_handshake;
-                }
-#endif
             }
 
             if (type == finished) {
@@ -9611,11 +9570,6 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                     return ret;
                 }
         #endif
-#ifdef WOLFSSL_QUIC
-                if (WOLFSSL_IS_QUIC(ssl)) {
-                    ssl->quic.enc_level_read = wolfssl_encryption_application;
-                }
-#endif
             }
         #ifdef WOLFSSL_POST_HANDSHAKE_AUTH
             if (type == certificate_request &&
@@ -11006,11 +10960,6 @@ int wolfSSL_accept_TLSv13(WOLFSSL* ssl)
             WOLFSSL_MSG("accept state ACCEPT_CLIENT_HELLO_DONE");
             if (!IsAtLeastTLSv1_3(ssl->version))
                 return wolfSSL_accept(ssl);
-#ifdef WOLFSSL_QUIC
-            if (WOLFSSL_IS_QUIC(ssl)) {
-                ssl->quic.enc_level_read = wolfssl_encryption_handshake;
-            }
-#endif
             FALL_THROUGH;
 
         case TLS13_ACCEPT_CLIENT_HELLO_DONE :
@@ -11121,12 +11070,6 @@ int wolfSSL_accept_TLSv13(WOLFSSL* ssl)
             }
             ssl->options.acceptState = TLS13_SERVER_HELLO_SENT;
             WOLFSSL_MSG("accept state SERVER_HELLO_SENT");
-#ifdef WOLFSSL_QUIC
-            if (WOLFSSL_IS_QUIC(ssl)) {
-                ssl->quic.enc_level_read = wolfssl_encryption_handshake;
-                ssl->quic.enc_level_write = wolfssl_encryption_handshake;
-            }
-#endif
             FALL_THROUGH;
 
         case TLS13_SERVER_HELLO_SENT :
@@ -11315,12 +11258,6 @@ int wolfSSL_accept_TLSv13(WOLFSSL* ssl)
                 }
             }
 #endif /* NO_HANDSHAKE_DONE_CB */
-#ifdef WOLFSSL_QUIC
-            if (WOLFSSL_IS_QUIC(ssl)) {
-                ssl->quic.enc_level_read = wolfssl_encryption_application;
-                ssl->quic.enc_level_write = wolfssl_encryption_application;
-            }
-#endif
 
             if (!ssl->options.keepResources) {
                 FreeHandshakeResources(ssl);

@@ -10337,7 +10337,7 @@ static int TLSX_QuicTP_Parse(WOLFSSL *ssl, const byte *buffer, size_t len, int e
     const QuicTransportParam *tp, **ptp;
 
     (void)msgType;
-    tp = QuicTransportParam_new(buffer + OPAQUE16_LEN, len, ssl->heap);
+    tp = QuicTransportParam_new(buffer, len, ssl->heap);
     if (!tp) {
         return MEMORY_E;
     }

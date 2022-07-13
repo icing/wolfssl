@@ -6589,9 +6589,6 @@ int InitSSL(WOLFSSL* ssl, WOLFSSL_CTX* ctx, int writeDup)
         ssl->numGroups = ctx->numGroups;
     }
 #endif
-#ifdef WOLFSSL_QUIC
-    ssl->quic.method = ctx->quic.method;
-#endif
 
 #ifdef HAVE_TLS_EXTENSIONS
 #ifdef HAVE_MAX_FRAGMENT
@@ -6845,6 +6842,13 @@ int InitSSL(WOLFSSL* ssl, WOLFSSL_CTX* ctx, int writeDup)
     ssl->dtls13Rtx.rtxRecordTailPtr = &ssl->dtls13Rtx.rtxRecords;
 #endif /* WOLFSSL_DTLS13 */
 
+#ifdef WOLFSSL_QUIC
+    if (ctx->quic.method) {
+        ret = wolfSSL_set_quic_method(ssl, ctx->quic.method);
+        if (ret != WOLFSSL_SUCCESS)
+            return ret;
+    }
+#endif
     return 0;
 }
 

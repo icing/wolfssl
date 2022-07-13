@@ -268,6 +268,7 @@ void wolfSSL_quic_clear(WOLFSSL* ssl)
     }
     ssl->quic.input_tail = NULL;
     ssl->quic.output_rec_remain = 0;
+    ssl->quic.output_sent_idx = 0;
 
     if (ssl->quic.scratch) {
         quic_record_free(ssl, ssl->quic.scratch);
@@ -316,10 +317,6 @@ int wolfSSL_CTX_set_quic_method(WOLFSSL_CTX *ctx, const WOLFSSL_QUIC_METHOD *qui
         return WOLFSSL_FAILURE;
     }
     ctx->quic.method = quic_method;
-    /* TODO: TLSv1.3 middlebox compatibility should be disabled for QUIC,
-     * but there seems to be no flag to do so if WOLFSSL_TLS13_MIDDLEBOX_COMPAT
-     * is configured?
-     */
     return WOLFSSL_SUCCESS;
 }
 
@@ -331,10 +328,11 @@ int wolfSSL_set_quic_method(WOLFSSL *ssl, const WOLFSSL_QUIC_METHOD *quic_method
         return WOLFSSL_FAILURE;
     }
     ssl->quic.method = quic_method;
-    /* TODO: TLSv1.3 middlebox compatibility should be disabled for QUIC,
-     * but there seems to be no flag to do so if WOLFSSL_TLS13_MIDDLEBOX_COMPAT
-     * is configured?
-     */
+#if defined(WOLFSSL_TLS13_MIDDLEBOX_COMPAT)
+    /* TLSv1.3 middlebox compatibility needs to be disabled for QUIC */
+    /* FIXME: we need a better way to disable this */
+    ssl->options.sentChangeCipher  = 1;
+#endif
     return WOLFSSL_SUCCESS;
 }
 
@@ -518,17 +516,19 @@ int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl)
         goto cleanup;
     }
 
-    if (ssl->options.handShakeState == NULL_STATE) {
-        WOLFSSL_MSG("WOLFSSL_QUIC_POST_HS handshake not started");
+    if (ssl->options.handShakeState != HANDSHAKE_DONE) {
+        WOLFSSL_MSG("WOLFSSL_QUIC_POST_HS handshake is not done yet");
         ret = WOLFSSL_FAILURE;
         goto cleanup;
     }
 
-    while (ssl->quic.input_head != NULL
-        && ssl->options.handShakeState != HANDSHAKE_DONE) {
-        if ((ret = wolfSSL_SSL_do_handshake(ssl)) != WOLFSSL_SUCCESS) {
+    while (ssl->quic.input_head != NULL || ssl->buffers.inputBuffer.length > 0) {
+        if ((ret = ProcessReply(ssl)) != WOLFSSL_SUCCESS) {
             goto cleanup;
         }
+    }
+    while (ssl->buffers.outputBuffer.length > 0) {
+        SendBuffered(ssl);
     }
 
 cleanup:
@@ -610,6 +610,7 @@ int wolfSSL_quic_receive(WOLFSSL* ssl, byte* buf, word32 sz)
     while (sz > 0) {
         n = 0;
         if (ssl->quic.input_head) {
+            ssl->quic.enc_level_read = ssl->quic.input_head->level;
             n = quic_record_transfer(ssl->quic.input_head, buf, sz);
             if (quic_record_done(ssl->quic.input_head)) {
                 QuicRecord *qr = ssl->quic.input_head;
@@ -643,64 +644,79 @@ cleanup:
  * The messages in the output buffer are unencrypted TLS records. We need
  * to forward the content of those records.
  */
-int wolfSSL_quic_send(WOLFSSL* ssl)
+static int wolfSSL_quic_send_internal(WOLFSSL* ssl, int keep_buffer)
 {
     int ret = 0, aret;
     size_t len;
     RecordLayerHeader* rl;
     word16 rlen;
+    word32 idx, length;
 
     WOLFSSL_ENTER("wolfSSL_quic_send");
 
-    while (ssl->buffers.outputBuffer.length > 0) {
+    idx = ssl->buffers.outputBuffer.idx;
+    length = ssl->buffers.outputBuffer.length;
+    if (ssl->quic.output_sent_idx > 0) {
+        idx += ssl->quic.output_sent_idx;
+        length -= ssl->quic.output_sent_idx;
+    }
+    while (length > 0) {
         if (ssl->quic.output_rec_remain > 0) {
             len = ssl->quic.output_rec_remain;
-            if (len > ssl->buffers.outputBuffer.length) {
-                len = ssl->buffers.outputBuffer.length;
+            if (len > length) {
+                len = length;
             }
 
             aret = ssl->quic.method->add_handshake_data(
                 ssl, ssl->quic.enc_level_write,
-                (const uint8_t*)ssl->buffers.outputBuffer.buffer +
-                    ssl->buffers.outputBuffer.idx, len);
+                (const uint8_t*)ssl->buffers.outputBuffer.buffer + idx, len);
             if (aret != 1) {
                 /* The application has an error. General desaster. */
                 WOLFSSL_MSG("WOLFSSL_QUIC_SEND application failed");
                 ret = FWRITE_ERROR;
                 goto cleanup;
             }
-            ssl->buffers.outputBuffer.idx += len;
-            ssl->buffers.outputBuffer.length -= len;
+            idx += len;
+            length -= len;
             ssl->quic.output_rec_remain -= len;
         }
         else {
             /* at start of a TLS Record */
-            rl = (RecordLayerHeader*)ssl->buffers.outputBuffer.buffer +
-                        ssl->buffers.outputBuffer.idx;
+            rl = (RecordLayerHeader*)ssl->buffers.outputBuffer.buffer + idx;
             ato16(rl->length, &rlen);
-            /* TODO: check that rl->type really is about handshake? */
-            ssl->buffers.outputBuffer.idx += RECORD_HEADER_SZ;
-            ssl->buffers.outputBuffer.length -= RECORD_HEADER_SZ;
+            idx += RECORD_HEADER_SZ;
+            length -= RECORD_HEADER_SZ;
             ssl->quic.output_rec_remain = rlen;
         }
     }
 
-    ssl->buffers.outputBuffer.idx = 0;
+    if (keep_buffer) {
+        /* we keep the buffer as is, but remember what we already sent. */
+        ssl->quic.output_sent_idx = idx;
+    }
+    else {
+        ssl->buffers.outputBuffer.idx = 0;
+        ssl->buffers.outputBuffer.length = 0;
+        ssl->quic.output_sent_idx = 0;
+    }
 
 cleanup:
     WOLFSSL_LEAVE("wolfSSL_quic_send", ret);
     return ret;
 }
 
+int wolfSSL_quic_send(WOLFSSL* ssl)
+{
+    return wolfSSL_quic_send_internal(ssl, 0);
+}
 
 int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
                                  enum DeriveKeyType ktype,
-                                 enum encrypt_side side,
-                                 size_t secret_len)
+                                 enum encrypt_side side)
 {
     const uint8_t *rx_secret = NULL, *tx_secret = NULL;
     WOLFSSL_ENCRYPTION_LEVEL level;
-    int ret = 1;
+    int ret = 0;
 
     WOLFSSL_ENTER("wolfSSL_quic_forward_secrets");
     switch (ktype) {
@@ -711,16 +727,14 @@ int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
             level = wolfssl_encryption_handshake;
             break;
         case traffic_key:
+            FALL_THROUGH;
+        case update_traffic_key:
             level = wolfssl_encryption_application;
             break;
-        case update_traffic_key:
-            /* TODO: not sure, fail for now */
-            WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS update traffic secret unsupported");
-            goto cleanup;
         case no_key:
             FALL_THROUGH;
         default:
-            WOLFSSL_MSG("WOLFSSL_QUIC_FORWARD_SECRETS unknown level");
+            /* ignore */
             goto cleanup;
     }
 
@@ -739,19 +753,83 @@ int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
     }
 
     ret = !ssl->quic.method->set_encryption_secrets(ssl, level, rx_secret, tx_secret,
-                                                    secret_len);
+                                                    ssl->specs.hash_size);
+
+    /* Having installed the secrets, any future read/write will happen
+     * at the level. */
+     if (tx_secret && ssl->quic.enc_level_write != level) {
+        ssl->quic.enc_level_write_next = level;
+     }
+     if (rx_secret && ssl->quic.enc_level_read != level) {
+        ssl->quic.enc_level_read_next = level;
+     }
 
 cleanup:
     WOLFSSL_LEAVE("wolfSSL_quic_forward_secrets", ret);
     return ret;
 }
 
+int wolfSSL_quic_keys_active(WOLFSSL* ssl, enum encrypt_side side)
+{
+    int ret = 0;
+
+    /* Keys derived from recent secrets have been activated */
+    if (side == ENCRYPT_AND_DECRYPT_SIDE || side == ENCRYPT_SIDE_ONLY) {
+        /* If there is data in the output buffers, it was supposed to be
+         * encrypted at the previous level. We need to remember that when
+         * forwarding this data to the QUIC protocol application. */
+        if (ssl->buffers.outputBuffer.length > 0) {
+            ret = wolfSSL_quic_send_internal(ssl, 1);
+            if (ret)
+                goto cleanup;
+        }
+        ssl->quic.enc_level_write = ssl->quic.enc_level_write_next;
+    }
+    if (side == ENCRYPT_AND_DECRYPT_SIDE || side == DECRYPT_SIDE_ONLY) {
+        ssl->quic.enc_level_read = ssl->quic.enc_level_read_next;
+    }
+cleanup:
+    return ret;
+}
 
 const WOLFSSL_EVP_CIPHER *wolfSSL_quic_get_aead(WOLFSSL *ssl)
 {
-    return wolfSSL_EVP_get_cipherbynid(
-        wolfSSL_CIPHER_get_id(
-            wolfSSL_get_current_cipher(ssl)));
+    WOLFSSL_CIPHER *cipher = wolfSSL_get_current_cipher(ssl);
+    const WOLFSSL_EVP_CIPHER *evp_cipher;
+
+    switch (cipher->cipherSuite) {
+#if !defined(NO_AES) && defined(HAVE_AESGCM)
+        case TLS_AES_128_GCM_SHA256:
+            evp_cipher = wolfSSL_EVP_aes_128_gcm();
+            break;
+        case TLS_AES_256_GCM_SHA384:
+            evp_cipher = wolfSSL_EVP_aes_256_gcm();
+            break;
+#endif
+#if defined(HAVE_CHACHA) && defined(HAVE_POLY1305)
+        case TLS_CHACHA20_POLY1305_SHA256:
+            evp_cipher = wolfSSL_EVP_chacha20_poly1305();
+            break;
+#endif
+#if defined(WOLFSSL_AES_COUNTER) && defined(WOLFSSL_AES_128)
+        case TLS_AES_128_CCM_SHA256:
+            FALL_THROUGH;
+        case TLS_AES_128_CCM_8_SHA256:
+            evp_cipher = wolfSSL_EVP_aes_128_ctr();
+            break;
+#endif
+
+        default:
+            evp_cipher = NULL;
+            break;
+    }
+
+    if (!evp_cipher) {
+        /* should not happen, as SSL* should not have negotiated it? */
+        WOLFSSL_MSG("wolfSSL_quic_get_aead: current cipher not supported");
+        return NULL;
+    }
+    return evp_cipher;
 }
 
 static int evp_cipher_eq(const WOLFSSL_EVP_CIPHER *c1, const WOLFSSL_EVP_CIPHER *c2)
@@ -762,27 +840,42 @@ static int evp_cipher_eq(const WOLFSSL_EVP_CIPHER *c1, const WOLFSSL_EVP_CIPHER 
 
 const WOLFSSL_EVP_CIPHER *wolfSSL_quic_get_hp(WOLFSSL *ssl)
 {
-    const WOLFSSL_EVP_CIPHER *aead = wolfSSL_quic_get_aead(ssl);
+    WOLFSSL_CIPHER *cipher = wolfSSL_get_current_cipher(ssl);
+    const WOLFSSL_EVP_CIPHER *evp_cipher;
 
-#ifdef WOLFSSL_AES_COUNTER
-#ifdef WOLFSSL_AES_128
-    if (evp_cipher_eq(aead, wolfSSL_EVP_aes_128_gcm())) {
-        return wolfSSL_EVP_aes_128_ctr();
-    }
+    switch (cipher->cipherSuite) {
+#if !defined(NO_AES) && defined(HAVE_AESGCM)
+        case TLS_AES_128_GCM_SHA256:
+            evp_cipher = wolfSSL_EVP_aes_128_ctr();
+            break;
+        case TLS_AES_256_GCM_SHA384:
+            evp_cipher = wolfSSL_EVP_aes_256_ctr();
+            break;
+#endif
+#if defined(HAVE_CHACHA) && defined(HAVE_POLY1305)
+        case TLS_CHACHA20_POLY1305_SHA256:
+            evp_cipher = wolfSSL_EVP_chacha20_poly1305();
+            break;
+#endif
+#if defined(WOLFSSL_AES_COUNTER) && defined(WOLFSSL_AES_128)
+        case TLS_AES_128_CCM_SHA256:
+            FALL_THROUGH;
+        case TLS_AES_128_CCM_8_SHA256:
+            evp_cipher = wolfSSL_EVP_aes_128_ctr();
+            break;
 #endif
 
-#ifdef WOLFSSL_AES_256
-    if (evp_cipher_eq(aead, wolfSSL_EVP_aes_256_gcm())) {
-        return wolfSSL_EVP_aes_256_ctr();
-    }
-#endif
-#endif
-
-    if (evp_cipher_eq(aead, wolfSSL_EVP_chacha20_poly1305())) {
-        return aead;
+        default:
+            evp_cipher = NULL;
+            break;
     }
 
-    return NULL;
+    if (!evp_cipher) {
+        /* should not happen, as SSL* should not have negotiated it? */
+        WOLFSSL_MSG("wolfSSL_quic_get_hp: current cipher not supported");
+        return NULL;
+    }
+    return evp_cipher;
 }
 
 size_t wolfSSL_quic_get_aead_tag_len(const WOLFSSL_EVP_CIPHER *aead)
@@ -798,6 +891,7 @@ size_t wolfSSL_quic_get_aead_tag_len(const WOLFSSL_EVP_CIPHER *aead)
 
 int wolfSSL_quic_aead_is_gcm(const WOLFSSL_EVP_CIPHER *aead)
 {
+#if !defined(NO_AES) && defined(HAVE_AESGCM)
     if (evp_cipher_eq(aead, wolfSSL_EVP_aes_128_gcm())
 #ifdef WOLFSSL_AES_256
         || evp_cipher_eq(aead, wolfSSL_EVP_aes_256_gcm())
@@ -805,13 +899,17 @@ int wolfSSL_quic_aead_is_gcm(const WOLFSSL_EVP_CIPHER *aead)
     ) {
         return 1;
     }
+#endif
     return 0;
 }
 
 int wolfSSL_quic_aead_is_ccm(const WOLFSSL_EVP_CIPHER *aead)
 {
-    /* Seems currently not supported */
-    (void)aead;
+#if defined(WOLFSSL_AES_COUNTER) && defined(WOLFSSL_AES_128)
+    if (evp_cipher_eq(aead, wolfSSL_EVP_aes_128_ctr())) {
+        return 1;
+    }
+#endif
     return 0;
 }
 

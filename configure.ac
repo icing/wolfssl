@@ -1964,6 +1964,11 @@ then
     ENABLED_AESCTR=yes
 fi
 
+if test "$ENABLED_QUIC" = "yes"
+then
+    ENABLED_AESCTR=yes
+fi
+
 # AES-OFB
 AC_ARG_ENABLE([aesofb],
     [AS_HELP_STRING([--enable-aesofb],[Enable wolfSSL AES-OFB support (default: disabled)])],
@@ -4763,7 +4768,7 @@ AC_ARG_ENABLE([session-ticket],
     [ ENABLED_SESSION_TICKET=no ]
     )
 
-if test "x$ENABLED_NGINX" = "xyes" || test "$ENABLED_WPAS" = "yes" || test "x$ENABLED_HAPROXY" = "xyes" || test "x$ENABLED_LIGHTY" = "xyes"
+if test "x$ENABLED_NGINX" = "xyes" || test "$ENABLED_WPAS" = "yes" || test "x$ENABLED_HAPROXY" = "xyes" || test "x$ENABLED_LIGHTY" = "xyes" || test "x$ENABLED_QUIC" = "xyes"
 then
     ENABLED_SESSION_TICKET=yes
 fi

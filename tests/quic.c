@@ -593,7 +593,7 @@ static void check_quic_client_hello(const byte *data, size_t data_len,
     for (; idx < rec_len; ++idx) {
         AssertTrue(data[idx] == 0); /* padding */
     }
-    if (/*disables code*/(0)) {
+    if (/*disables code*/(1)) {
         ext_dump(exts, exts_len);
         dump_buffer("ClientHello", data, data_len);
     }
@@ -643,6 +643,8 @@ static int test_quic_client_hello(void) {
     /* Set transport params, expect both extensions */
     printf("   quic client_hello(tp set)");
     AssertNotNull(ssl = wolfSSL_new(ctx));
+    wolfSSL_UseSessionTicket(ssl);
+    wolfSSL_set_tlsext_host_name(ssl, "wolfssl.com");
     QuicTestContext_init(&tctx, ssl, "client");
     wolfSSL_set_quic_transport_params(ssl, tp_params, sizeof(tp_params));
     AssertTrue(wolfSSL_connect(ssl) != 0);
@@ -750,6 +752,7 @@ static int test_quic_server_hello(void) {
     const byte tp_params_s[8] = {0, 1, 2, 3, 4, 5, 6, 7};
 
     AssertNotNull(ctx_c = wolfSSL_CTX_new(wolfTLSv1_3_client_method()));
+    wolfSSL_CTX_UseSessionTicket(ctx_c);
 
     AssertNotNull(ctx_s = wolfSSL_CTX_new(wolfTLSv1_3_server_method()));
     AssertTrue(wolfSSL_CTX_use_certificate_file(ctx_s, svrCertFile, WOLFSSL_FILETYPE_PEM));
@@ -819,12 +822,17 @@ static int test_quic_server_hello(void) {
     AssertIntEQ(wolfSSL_quic_write_level(ssl_c), wolfssl_encryption_application);
     AssertIntEQ(wolfSSL_quic_read_level(ssl_s), wolfssl_encryption_application);
     AssertIntEQ(wolfSSL_quic_write_level(ssl_s), wolfssl_encryption_application);
+    /* the last client write (FINISHED) was at handshake level */
+    AssertIntEQ(tctx_c.output_level, wolfssl_encryption_handshake);
+    /* we have the app secrets */
     check_secrets(&tctx_c, wolfssl_encryption_application, 32, 32);
     check_secrets(&tctx_s, wolfssl_encryption_application, 32, 32);
-
     /* verify client and server have the same secrets establishd */
     assert_secrets_EQ(&tctx_c, &tctx_s, wolfssl_encryption_handshake);
     assert_secrets_EQ(&tctx_c, &tctx_s, wolfssl_encryption_application);
+
+    AssertNotNull(wolfSSL_quic_get_aead(ssl_c));
+    AssertNotNull(wolfSSL_quic_get_aead(ssl_s));
 
     wolfSSL_free(ssl_c);
     wolfSSL_free(ssl_s);
