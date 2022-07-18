@@ -531,6 +531,39 @@ void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled)
 #endif /* WOLFSSL_EARLY_DATA */
 
 
+int wolfSSL_quic_read_write(WOLFSSL *ssl)
+{
+    int ret = WOLFSSL_SUCCESS, nret;
+
+    WOLFSSL_ENTER("wolfSSL_quic_read_write");
+
+    if (!wolfSSL_is_quic(ssl)) {
+        WOLFSSL_MSG("WOLFSSL_QUIC_READ_WRITE not a QUIC SSL");
+        ret = WOLFSSL_FAILURE;
+        goto cleanup;
+    }
+
+    if (ssl->options.handShakeState != HANDSHAKE_DONE) {
+        ret = wolfSSL_SSL_do_handshake(ssl);
+        if (ret != WOLFSSL_SUCCESS)
+            goto cleanup;
+    }
+
+    while (ssl->quic.input_head != NULL || ssl->buffers.inputBuffer.length > 0) {
+        if ((nret = ProcessReply(ssl)) < 0) {
+            ret = nret;
+            goto cleanup;
+        }
+    }
+    while (ssl->buffers.outputBuffer.length > 0) {
+        SendBuffered(ssl);
+    }
+
+cleanup:
+    WOLFSSL_LEAVE("wolfSSL_quic_read_write", ret);
+    return ret;
+}
+
 int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl)
 {
     int ret = WOLFSSL_SUCCESS, nret;

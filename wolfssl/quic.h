@@ -173,10 +173,15 @@ WOLFSSL_API int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL
                                           const uint8_t *data, size_t len);
 
 /**
- * Process any data still pending in the SSL instance after the handshake
- * is complete.
+ * Process any CRYPTO data added post-handshake.
  */
 WOLFSSL_API int wolfSSL_process_quic_post_handshake(WOLFSSL *ssl);
+
+/**
+ * Process any pending input and flush all output. Can be invoked
+ * during and/or after handshake processing.
+ */
+WOLFSSL_API int wolfSSL_quic_read_write(WOLFSSL *ssl);
 
 /**
  * Get the AEAD cipher that is currently selected in the SSL instance.
