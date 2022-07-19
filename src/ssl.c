@@ -9784,6 +9784,13 @@ int wolfSSL_SESSION_get_master_key_length(const WOLFSSL_SESSION* ses)
     return SECRET_LEN;
 }
 
+#ifdef WOLFSSL_EARLY_DATA
+word32 wolfSSL_SESSION_get_max_early_data(const WOLFSSL_SESSION *session)
+{
+    return session->maxEarlyDataSz;
+}
+#endif /* WOLFSSL_EARLY_DATA */
+
 #endif /* OPENSSL_EXTRA */
 
 typedef struct {

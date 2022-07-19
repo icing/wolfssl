@@ -4938,6 +4938,7 @@ struct WOLFSSL {
         QuicRecord *input_head;          /* we own, data for handshake */
         QuicRecord *input_tail;          /* points to last element for append */
         QuicRecord *scratch;             /* we own, record construction */
+        int output_rec_level;            /* encryption level of current output record */
         word32 output_rec_remain;        /* how many bytes of output TLS record
                                           * content have not been handled yet by quic */
         word32 output_sent_idx;          /* up to which position in the output buffer

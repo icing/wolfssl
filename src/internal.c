@@ -17476,7 +17476,7 @@ int TimingPadVerify(WOLFSSL* ssl, const byte* input, int padLen, int macSz,
 
 int DoApplicationData(WOLFSSL* ssl, byte* input, word32* inOutIdx, int sniff)
 {
-    word32 msgSz   = ssl->keys.encryptSz;
+    word32 msgSz   = IsEncryptionOn(ssl, 0)? ssl->keys.encryptSz : ssl->curSize;
     word32 idx     = *inOutIdx;
     int    dataSz;
     int    ivExtra = 0;

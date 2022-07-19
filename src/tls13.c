@@ -2666,7 +2666,7 @@ int BuildTls13Message(WOLFSSL* ssl, byte* output, int outSz, const byte* input,
                 /* QUIC does not use encryption of the TLS Record Layer.
                  * Return the original length + added headers
                  * and restore it in the record header. */
-                AddTls13RecordHeader(output, inSz, application_data, ssl);
+                AddTls13RecordHeader(output, inSz, type, ssl);
                 ret = args->headerSz + inSz;
                 goto exit_buildmsg;
             }
@@ -3658,7 +3658,8 @@ int SendTls13ClientHello(WOLFSSL* ssl)
 
     case TLS_ASYNC_END:
 #ifdef WOLFSSL_EARLY_DATA_GROUP
-    if (ssl->earlyData == no_early_data)
+    /* group early data with client hello, but not for quic */
+    if (ssl->earlyData == no_early_data || WOLFSSL_IS_QUIC(ssl))
 #endif
         ret = SendBuffered(ssl);
 
@@ -9221,7 +9222,9 @@ static int SanityCheckTls13MsgReceived(WOLFSSL* ssl, byte type)
             #ifdef WOLFSSL_EARLY_DATA
                 if (ssl->earlyData == process_early_data &&
                     /* early data may be lost when using DTLS */
-                    !ssl->options.dtls) {
+                    !ssl->options.dtls
+                    /* QUIC does not end EndOfEarlyData records */
+                    && !WOLFSSL_IS_QUIC(ssl)) {
                     return OUT_OF_ORDER_E;
                 }
             #endif
@@ -9559,6 +9562,15 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
                 ForceZero(ssl->arrays->preMasterSecret,
                     ssl->arrays->preMasterSz);
         #ifdef WOLFSSL_EARLY_DATA
+        #ifdef WOLFSSL_QUIC
+                if (WOLFSSL_IS_QUIC(ssl) && ssl->earlyData != no_early_data) {
+                    /* QUIC never sends/receives EndOfEarlyData, but having
+                     * early data means the last encrpytion keys had not been
+                     * set yet. */
+                    if ((ret = SetKeysSide(ssl, ENCRYPT_SIDE_ONLY)) != 0)
+                        return ret;
+                }
+        #endif
                 if ((ret = DeriveTls13Keys(ssl, traffic_key,
                                     ENCRYPT_AND_DECRYPT_SIDE,
                                     ssl->earlyData == no_early_data)) != 0) {
@@ -9966,7 +9978,8 @@ int wolfSSL_connect_TLSv13(WOLFSSL* ssl)
 
         case FIRST_REPLY_DONE:
         #ifdef WOLFSSL_EARLY_DATA
-            if (!ssl->options.dtls && ssl->earlyData != no_early_data) {
+            if (!ssl->options.dtls && ssl->earlyData != no_early_data
+                && !WOLFSSL_IS_QUIC(ssl)) {
                 if ((ssl->error = SendTls13EndOfEarlyData(ssl)) != 0) {
                     WOLFSSL_ERROR(ssl->error);
                     return WOLFSSL_FATAL_ERROR;

@@ -77,7 +77,12 @@ static QuicRecord *quic_record_make(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level
     if (qr) {
         memset(qr, 0, sizeof(*qr));
         qr->level = level;
-        qr->capacity = qr->len = qr_length(data, len);
+        if (level == wolfssl_encryption_early_data) {
+            qr->capacity = qr->len = (word32)len;
+        }
+        else {
+            qr->capacity = qr->len = qr_length(data, len);
+        }
         if (qr->capacity == 0) {
             qr->capacity = 2*1024;
         }
@@ -179,7 +184,8 @@ static word32 quic_record_transfer(QuicRecord *qr, byte *buf, word32 sz)
     if (qr->rec_hdr_remain == 0) {
         /* start a new TLS record */
         rlen = (qr->len <= MAX_RECORD_SIZE)? qr->len : MAX_RECORD_SIZE;
-        offset += add_rec_header(buf, rlen, handshake);
+        offset += add_rec_header(buf, rlen, (qr->level == wolfssl_encryption_early_data)?
+            application_data : handshake);
         qr->rec_hdr_remain = rlen;
         sz -= offset;
     }
@@ -258,7 +264,6 @@ void wolfSSL_quic_clear(WOLFSSL* ssl)
         QuicTransportParam_free(ssl->quic.transport_peer_draft, ssl->heap);
         ssl->quic.transport_peer_draft = NULL;
     }
-    ssl->quic.enc_level_read = wolfssl_encryption_initial;
     ssl->quic.enc_level_write = wolfssl_encryption_initial;
     ssl->quic.enc_level_latest_recvd = wolfssl_encryption_initial;
 
@@ -515,7 +520,7 @@ void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled)
      * not return any error, sadly. So we just ignore any
      * unsuccessfull use. But we can produce some warnings.
      */
-    if (!wolfSSL_IS_QUIC(ssl)) {
+    if (!WOLFSSL_IS_QUIC(ssl)) {
         WOLFSSL_MSG("wolfSSL_set_quic_early_data_enabled: not a QUIC SSL");
     }
     else if (ssl->options.handShakeState != NULL_STATE) {
@@ -525,7 +530,7 @@ void wolfSSL_set_quic_early_data_enabled(WOLFSSL *ssl, int enabled)
         WOLFSSL_MSG("wolfSSL_set_quic_early_data_enabled: on client side");
     }
     else {
-        wolfSSL_set_max_early_data(ssl, enabled? MAX_EARLY_DATA_SZ : 0);
+        wolfSSL_set_max_early_data(ssl, enabled? UINT32_MAX : 0);
     }
 }
 #endif /* WOLFSSL_EARLY_DATA */
@@ -611,7 +616,7 @@ int wolfSSL_provide_quic_data(WOLFSSL *ssl, WOLFSSL_ENCRYPTION_LEVEL level,
         goto cleanup;
     }
 
-    if (level < ssl->quic.enc_level_read
+    if (level < wolfSSL_quic_read_level(ssl)
         || (ssl->quic.input_tail && level < ssl->quic.input_tail->level)
         || level < ssl->quic.enc_level_latest_recvd) {
         WOLFSSL_MSG("WOLFSSL_QUIC_PROVIDE_DATA wrong encryption level");
@@ -671,7 +676,6 @@ int wolfSSL_quic_receive(WOLFSSL* ssl, byte* buf, word32 sz)
     while (sz > 0) {
         n = 0;
         if (ssl->quic.input_head) {
-            ssl->quic.enc_level_read = ssl->quic.input_head->level;
             n = quic_record_transfer(ssl->quic.input_head, buf, sz);
             if (quic_record_done(ssl->quic.input_head)) {
                 QuicRecord *qr = ssl->quic.input_head;
@@ -687,7 +691,7 @@ int wolfSSL_quic_receive(WOLFSSL* ssl, byte* buf, word32 sz)
             if (transferred > 0) {
                 goto cleanup;
             }
-            transferred = WANT_READ;
+            ssl->error = transferred = WANT_READ;
             goto cleanup;
         }
         sz -= n;
@@ -728,8 +732,8 @@ static int wolfSSL_quic_send_internal(WOLFSSL* ssl, int keep_buffer)
                 len = length;
             }
 
-            aret = ssl->quic.method->add_handshake_data(
-                ssl, ssl->quic.enc_level_write,
+            aret = ssl->quic.method->add_handshake_data(ssl,
+                ssl->quic.output_rec_level,
                 (const uint8_t*)ssl->buffers.outputBuffer.buffer + idx, len);
             if (aret != 1) {
                 /* The application has an error. General desaster. */
@@ -748,6 +752,17 @@ static int wolfSSL_quic_send_internal(WOLFSSL* ssl, int keep_buffer)
             idx += RECORD_HEADER_SZ;
             length -= RECORD_HEADER_SZ;
             ssl->quic.output_rec_remain = rlen;
+            ssl->quic.output_rec_level = ssl->quic.enc_level_write;
+            if (rl->type == application_data) {
+                if (ssl->options.handShakeState != HANDSHAKE_DONE) {
+                    ssl->quic.output_rec_level = wolfssl_encryption_early_data;
+                }
+                else {
+                    WOLFSSL_MSG("WOLFSSL_QUIC_SEND application data after handshake");
+                    ret = FWRITE_ERROR;
+                    goto cleanup;
+                }
+            }
         }
     }
 
@@ -817,7 +832,12 @@ int wolfSSL_quic_forward_secrets(WOLFSSL *ssl,
                                                     ssl->specs.hash_size);
 
     /* Having installed the secrets, any future read/write will happen
-     * at the level. */
+     * at the level. Except early data, which is detected on the record
+     * type and the handshake state. */
+     if (ktype == early_data_key) {
+        goto cleanup;
+     }
+
      if (tx_secret && ssl->quic.enc_level_write != level) {
         ssl->quic.enc_level_write_next = level;
      }
