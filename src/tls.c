@@ -11496,7 +11496,9 @@ int TLSX_PopulateExtensions(WOLFSSL* ssl, byte isServer)
             }
     #endif /* !NO_PSK */
         #if defined(HAVE_SESSION_TICKET) || !defined(NO_PSK)
-            if (usingPSK) {
+            /* It seems QUIC server will not generate session tickets
+             * if clients do not announce PSK properly */
+            if (usingPSK || WOLFSSL_IS_QUIC(ssl)) {
                 byte modes;
 
                 /* Pre-shared key modes: mandatory extension for resumption. */
