@@ -3445,7 +3445,6 @@ int SendTls13ClientHello(WOLFSSL* ssl)
 #endif
 #if defined(WOLFSSL_TLS13_MIDDLEBOX_COMPAT)
     {
-    /* QUIC disables middlebox compat */
         args->length += ID_LEN;
         ssl->options.tls13MiddleBoxCompat = 1;
     }
@@ -3682,7 +3681,8 @@ int SendTls13ClientHello(WOLFSSL* ssl)
 
     case TLS_ASYNC_END:
 #ifdef WOLFSSL_EARLY_DATA_GROUP
-    /* group early data with client hello, but not for quic */
+    /* QUIC needs to forward records at their encryption level
+     * and is therefore unable to group here */
     if (ssl->earlyData == no_early_data || WOLFSSL_IS_QUIC(ssl))
 #endif
         ret = SendBuffered(ssl);
@@ -9275,7 +9275,7 @@ static int SanityCheckTls13MsgReceived(WOLFSSL* ssl, byte type)
                 if (ssl->earlyData == process_early_data &&
                     /* early data may be lost when using DTLS */
                     !ssl->options.dtls
-                    /* QUIC does not end EndOfEarlyData records */
+                    /* QUIC does not use EndOfEarlyData records */
                     && !WOLFSSL_IS_QUIC(ssl)) {
                     return OUT_OF_ORDER_E;
                 }
