@@ -1,6 +1,6 @@
 /* api.c API unit tests
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -21804,20 +21804,20 @@ static int test_wc_curve25519_export_key_raw (void)
 
     if(0 != wc_InitRng(&rng)){
         printf(testingFmt, "failed due to wc_InitRng");
-        fflush( stdout );
+        fflush(stdout);
         return  1;
     }
 
     if(0 != wc_curve25519_init(&key)){
         printf(testingFmt, "failed due to wc_curve25519_init");
-        fflush( stdout );
+        fflush(stdout);
         wc_FreeRng(&rng);
         return  1;
     }
 
     if(0 != wc_curve25519_make_key(&rng, CURVE25519_KEYSIZE, &key)){
         printf(testingFmt, "failed due to wc_curve25519_make_key");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21834,7 +21834,7 @@ static int test_wc_curve25519_export_key_raw (void)
             NULL , privateKey, &prvkSz, publicKey, &pubkSz)){
 
         printf(testingFmt,"failed at bad-arg-case-1.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21848,7 +21848,7 @@ static int test_wc_curve25519_export_key_raw (void)
             &key , NULL, &prvkSz, publicKey, &pubkSz)){
 
         printf(testingFmt,"failed at bad-arg-case-2.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21862,7 +21862,7 @@ static int test_wc_curve25519_export_key_raw (void)
             &key , privateKey, NULL, publicKey, &pubkSz)){
 
         printf(testingFmt,"failed at bad-arg-case-3.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21876,7 +21876,7 @@ static int test_wc_curve25519_export_key_raw (void)
             &key , privateKey, &prvkSz, NULL, &pubkSz)){
 
         printf(testingFmt,"failed at bad-arg-case-4.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21890,7 +21890,7 @@ static int test_wc_curve25519_export_key_raw (void)
             &key , privateKey, &prvkSz, publicKey, NULL )){
 
         printf(testingFmt,"failed at bad-arg-case-5.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21905,7 +21905,7 @@ static int test_wc_curve25519_export_key_raw (void)
     if( 0 != wc_curve25519_export_private_raw(&key, prik, &prksz)){
 
         printf(testingFmt,"failed due to wc_curve25519_export_private_raw");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21917,7 +21917,7 @@ static int test_wc_curve25519_export_key_raw (void)
     if(0 != wc_curve25519_export_public(&key, pubk, &pbksz)){
 
         printf(testingFmt,"failed due to wc_curve25519_export_public");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21931,7 +21931,7 @@ static int test_wc_curve25519_export_key_raw (void)
                                                      publicKey,  &pubkSz)){
 
         printf(testingFmt,"failed due to wc_curve25519_export_key_raw");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -21947,7 +21947,7 @@ static int test_wc_curve25519_export_key_raw (void)
             0 == XMEMCMP(publicKey,  pubk, CURVE25519_KEYSIZE)){
 
             printf(resultFmt,passed);
-            fflush( stdout );
+            fflush(stdout);
             wc_curve25519_free(&key);
             wc_FreeRng(&rng);
             return  0;
@@ -21956,7 +21956,7 @@ static int test_wc_curve25519_export_key_raw (void)
         else{
 
             printf(testingFmt,"failed due to key-contents-inconsistency.");
-            fflush( stdout );
+            fflush(stdout);
             wc_curve25519_free(&key);
             wc_FreeRng(&rng);
             return  1;
@@ -21965,14 +21965,14 @@ static int test_wc_curve25519_export_key_raw (void)
     else{
 
         printf(testingFmt,"failed due to bad-key-size.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
     }
 
 #endif
-    fflush( stdout );
+    fflush(stdout);
 
     return 0;
 } /* end of test_wc_curve25519_export_key_raw */
@@ -22002,20 +22002,20 @@ static int test_wc_curve25519_export_key_raw_ex (void)
 
     if(0 != wc_InitRng(&rng)){
         printf(testingFmt, "failed due to wc_InitRng");
-        fflush( stdout );
+        fflush(stdout);
         return  1;
     }
 
     if(0 != wc_curve25519_init(&key)){
         printf(testingFmt, "failed due to wc_curve25519_init");
-        fflush( stdout );
+        fflush(stdout);
         wc_FreeRng(&rng);
         return  1;
     }
 
     if(0 != wc_curve25519_make_key(&rng, CURVE25519_KEYSIZE, &key)){
         printf(testingFmt, "failed due to wc_curve25519_make_key");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22032,7 +22032,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
                      &prvkSz, publicKey, &pubkSz, EC25519_LITTLE_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-1.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22046,7 +22046,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
                     &prvkSz, publicKey, &pubkSz, EC25519_LITTLE_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-2.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22059,7 +22059,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
                             NULL,publicKey, &pubkSz,EC25519_LITTLE_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-3.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22072,7 +22072,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
      &prvkSz, NULL, &pubkSz, EC25519_LITTLE_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-4.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22085,7 +22085,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
      &prvkSz, publicKey, NULL, EC25519_LITTLE_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-5.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22098,7 +22098,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
      &prvkSz, publicKey, &pubkSz, EC25519_BIG_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-6.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22111,7 +22111,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
             publicKey, &pubkSz, EC25519_BIG_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-7.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22124,7 +22124,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
                               NULL, publicKey, &pubkSz, EC25519_BIG_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-8.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22137,7 +22137,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
     &prvkSz, NULL, &pubkSz, EC25519_BIG_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-9.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22150,7 +22150,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
      &prvkSz, publicKey, NULL, EC25519_BIG_ENDIAN)){
 
         printf(testingFmt,"failed at bad-arg-case-10.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22165,7 +22165,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
      &prvkSz, publicKey, NULL, EC25519_BIG_ENDIAN + 10 )){
 
         printf(testingFmt,"failed at bad-arg-case-11.");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22179,7 +22179,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
     if(0 != wc_curve25519_export_private_raw( &key, prik, &prksz )){
 
         printf(testingFmt,"failed due to wc_curve25519_export_private_raw");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22190,7 +22190,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
     if(0 != wc_curve25519_export_public( &key, pubk, &pbksz )){
 
         printf(testingFmt,"failed due to wc_curve25519_export_public");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22204,7 +22204,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
                     publicKey, &pubkSz, EC25519_BIG_ENDIAN)) {
 
         printf(testingFmt,"failed due to wc_curve25519_export_key_raw_ex");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22229,7 +22229,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
                 else{
 
                     printf(testingFmt,"failed due to key-size-inconsistency");
-                    fflush( stdout );
+                    fflush(stdout);
                     wc_curve25519_free(&key);
                     wc_FreeRng(&rng);
                     return  1;
@@ -22239,7 +22239,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
 
                 printf(testingFmt,
                             "failed due to wc_curve25519_export_key_raw_ex");
-                fflush( stdout );
+                fflush(stdout);
                 wc_curve25519_free(&key);
                 wc_FreeRng(&rng);
                 return  1;
@@ -22249,7 +22249,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
         else{
 
             printf(testingFmt,"failed due to key-contents-inconsistency");
-            fflush( stdout );
+            fflush(stdout);
             wc_curve25519_free(&key);
             wc_FreeRng(&rng);
             return  1;
@@ -22259,7 +22259,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
     else{
 
         printf(testingFmt,"failed due to bad-key-size");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22280,7 +22280,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
 
                 /* no more test*/
                 printf(resultFmt, passed );
-                fflush( stdout );
+                fflush(stdout);
                 wc_curve25519_free(&key);
                 wc_FreeRng(&rng);
                 return 0;
@@ -22288,7 +22288,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
         else{
 
             printf(testingFmt,"failed due to key-size-inconsistency");
-            fflush( stdout );
+            fflush(stdout);
             wc_curve25519_free(&key);
             wc_FreeRng(&rng);
             return  1;
@@ -22298,7 +22298,7 @@ static int test_wc_curve25519_export_key_raw_ex (void)
 
         printf(testingFmt,
                    "failed due to wc_curve25519_export_key_raw_ex(BIGENDIAN)");
-        fflush( stdout );
+        fflush(stdout);
         wc_curve25519_free(&key);
         wc_FreeRng(&rng);
         return  1;
@@ -22482,6 +22482,7 @@ static int test_wc_curve25519_shared_secret_ex(void)
 
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve25519_free(&private_key);
     wc_curve25519_free(&public_key);
     wc_FreeRng(&rng);
@@ -22551,6 +22552,7 @@ static int test_wc_curve25519_make_pub(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve25519_free(&key);
     wc_FreeRng(&rng);
 #endif
@@ -22620,6 +22622,7 @@ static int test_wc_curve25519_export_public_ex (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve25519_free(&key);
     wc_FreeRng(&rng);
 #endif
@@ -22712,6 +22715,7 @@ static int test_wc_curve25519_import_private_raw_ex (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve25519_free(&key);
     wc_FreeRng(&rng);
 
@@ -22748,6 +22752,7 @@ static int test_wc_curve25519_import_private (void)
         ret = wc_curve25519_import_private(priv, privSz, &key);
     }
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve25519_free(&key);
     wc_FreeRng(&rng);
 #endif
@@ -22811,6 +22816,7 @@ static int test_wc_curve25519_export_private_raw_ex (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve25519_free(&key);
 #endif
     return ret;
@@ -22857,6 +22863,7 @@ static int test_wc_ed448_make_key (void)
 
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -22895,6 +22902,7 @@ static int test_wc_ed448_init (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_ed448_free(&key);
 
@@ -22964,6 +22972,7 @@ static int test_wc_ed448_sign_msg (void)
     } /* END sign */
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     #ifdef HAVE_ED448_VERIFY
         printf(testingFmt, "wc_ed448_verify_msg()");
 
@@ -23016,6 +23025,7 @@ static int test_wc_ed448_sign_msg (void)
         } /* END verify. */
 
         printf(resultFmt, ret == 0 ? passed : failed);
+        fflush(stdout);
     #endif /* Verify. */
 
     if (wc_FreeRng(&rng) && ret == 0) {
@@ -23079,6 +23089,7 @@ static int test_wc_ed448_import_public (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -23180,6 +23191,7 @@ static int test_wc_ed448_import_private_key (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -23246,6 +23258,7 @@ static int test_wc_ed448_export (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     printf(testingFmt, "wc_ed448_export_private_only()");
 
     if (ret == 0) {
@@ -23271,6 +23284,7 @@ static int test_wc_ed448_export (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -23319,6 +23333,7 @@ static int test_wc_ed448_size (void)
         }
     }
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (ret == 0) {
         printf(testingFmt, "wc_ed448_sig_size()");
@@ -23336,6 +23351,7 @@ static int test_wc_ed448_size (void)
         }
 
         printf(resultFmt, ret == 0 ? passed : failed);
+        fflush(stdout);
     } /* END wc_ed448_sig_size() */
 
     if (ret == 0) {
@@ -23351,6 +23367,7 @@ static int test_wc_ed448_size (void)
             }
         }
         printf(resultFmt, ret == 0 ? passed : failed);
+        fflush(stdout);
     } /* END wc_ed448_pub_size */
 
     if (ret == 0) {
@@ -23366,6 +23383,7 @@ static int test_wc_ed448_size (void)
             }
         }
         printf(resultFmt, ret == 0 ? passed : failed);
+        fflush(stdout);
     } /* END wc_ed448_pub_size */
 
     if (wc_FreeRng(&rng) && ret == 0) {
@@ -23430,6 +23448,7 @@ static int test_wc_ed448_exportKey (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (ret == 0) {
         printf(testingFmt, "wc_ed448_export_key()");
@@ -23456,6 +23475,7 @@ static int test_wc_ed448_exportKey (void)
             }
         }
         printf(resultFmt, ret == 0 ? passed : failed);
+        fflush(stdout);
     } /* END wc_ed448_export_key() */
 
     /* Cross check output. */
@@ -23532,6 +23552,7 @@ static int test_wc_Ed448PublicKeyToDer (void)
         wc_ed448_free(&key);
     }
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 
@@ -23562,6 +23583,7 @@ static int test_wc_curve448_init (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     /*  Test good args for wc_curve_448_free */
     wc_curve448_free(&key);
 
@@ -23634,6 +23656,7 @@ static int test_wc_curve448_make_key (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&key);
 #endif
     return ret;
@@ -23719,6 +23742,7 @@ static int test_wc_curve448_shared_secret_ex (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&private_key);
     wc_curve448_free(&public_key);
     wc_FreeRng(&rng);
@@ -23789,6 +23813,7 @@ static int test_wc_curve448_export_public_ex (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&key);
     wc_FreeRng(&rng);
 #endif
@@ -23852,6 +23877,7 @@ static int test_wc_curve448_export_private_raw_ex (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&key);
 #endif
     return ret;
@@ -23945,6 +23971,7 @@ static int test_wc_curve448_import_private_raw_ex (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&key);
 
 #endif
@@ -23985,6 +24012,7 @@ static int test_wc_curve448_export_key_raw (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&key);
     wc_FreeRng(&rng);
 #endif
@@ -24023,6 +24051,7 @@ static int test_wc_curve448_import_private (void)
         ret = wc_curve448_import_private(priv, privSz, &key);
     }
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&key);
     wc_FreeRng(&rng);
 #endif
@@ -24055,6 +24084,7 @@ static int test_wc_curve448_size (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_curve448_free(&key);
 #endif
     return ret;
@@ -24109,6 +24139,7 @@ static int test_wc_ecc_make_key (void)
 #endif
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
 
     return ret;
@@ -24140,6 +24171,7 @@ static int test_wc_ecc_init (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_ecc_free(&key);
 
@@ -24190,6 +24222,7 @@ static int test_wc_ecc_check_key (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -24243,6 +24276,7 @@ static int test_wc_ecc_get_generator(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_ecc_del_point(pt);
 #endif
@@ -24291,6 +24325,7 @@ static int test_wc_ecc_size (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -24572,6 +24607,7 @@ static int test_wc_ecc_shared_secret (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -24643,6 +24679,7 @@ static int test_wc_ecc_export_x963 (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -24756,6 +24793,7 @@ static int test_wc_ecc_export_x963_ex (void)
     #endif
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -24832,6 +24870,7 @@ static int test_wc_ecc_import_x963 (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -24915,6 +24954,7 @@ static int ecc_import_private_key (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -24982,6 +25022,7 @@ static int test_wc_ecc_export_private_only (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -25054,6 +25095,7 @@ static int test_wc_ecc_rs_to_sig (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     printf(testingFmt, "wc_ecc_sig_to_rs()");
     if (ret == 0) {
         ret = wc_ecc_sig_to_rs(sig, siglen, r, &rlen, s, &slen);
@@ -25081,6 +25123,7 @@ static int test_wc_ecc_rs_to_sig (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
 #endif
     return ret;
@@ -25153,6 +25196,7 @@ static int test_wc_ecc_import_raw(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_ecc_free(&key);
 
@@ -25227,6 +25271,7 @@ static int test_wc_ecc_import_unsigned(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_ecc_free(&key);
 
@@ -25272,6 +25317,7 @@ static int test_wc_ecc_sig_size (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -25323,6 +25369,7 @@ static int test_wc_ecc_ctx_new (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -25372,6 +25419,7 @@ static int test_wc_ecc_ctx_reset (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -25424,6 +25472,7 @@ static int test_wc_ecc_ctx_set_peer_salt (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     printf(testingFmt, "wc_ecc_ctx_set_peer_salt()");
 
     if (ret == 0) {
@@ -25443,6 +25492,7 @@ static int test_wc_ecc_ctx_set_peer_salt (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -25496,6 +25546,7 @@ static int test_wc_ecc_ctx_set_info (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -25522,6 +25573,9 @@ static int test_wc_ecc_encryptDecrypt (void)
     word32      msgSz = (word32)XSTRLEN("EccBlock Size 16");
 #ifdef WOLFSSL_ECIES_OLD
     byte        out[(sizeof("EccBlock Size 16") - 1) + WC_SHA256_DIGEST_SIZE];
+#elif defined(WOLFSSL_ECIES_GEN_IV)
+    byte        out[KEY20 * 2 + 1 + AES_BLOCK_SIZE +
+                    (sizeof("EccBlock Size 16") - 1) + WC_SHA256_DIGEST_SIZE];
 #else
     byte        out[KEY20 * 2 + 1 + (sizeof("EccBlock Size 16") - 1) + WC_SHA256_DIGEST_SIZE];
 #endif
@@ -25604,6 +25658,7 @@ static int test_wc_ecc_encryptDecrypt (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     printf(testingFmt, "wc_ecc_decrypt()");
 
 #ifdef WOLFSSL_ECIES_OLD
@@ -25652,6 +25707,7 @@ static int test_wc_ecc_encryptDecrypt (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -25683,6 +25739,7 @@ static int test_wc_ecc_del_point (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_ecc_del_point(pt);
 
@@ -25772,6 +25829,7 @@ static int test_wc_ecc_pointFns (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     /* Import */
     printf(testingFmt, "wc_ecc_import_point_der()");
@@ -25803,6 +25861,7 @@ static int test_wc_ecc_pointFns (void)
         }
     }
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     /* Copy */
     printf(testingFmt, "wc_ecc_copy_point()");
@@ -25824,6 +25883,7 @@ static int test_wc_ecc_pointFns (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     printf(testingFmt, "wc_ecc_cmp_point()");
     /* Compare point */
@@ -25843,6 +25903,7 @@ static int test_wc_ecc_pointFns (void)
         }
     }
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     printf(testingFmt, "wc_ecc_point_is_at_infinity()");
     /* At infinity if return == 1, otherwise return == 0. */
@@ -25860,6 +25921,7 @@ static int test_wc_ecc_pointFns (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
 #if !defined(HAVE_FIPS) || (defined(HAVE_FIPS_VERSION) && (HAVE_FIPS_VERSION>2))
 #ifdef USE_ECC_B_PARAM
@@ -25881,6 +25943,7 @@ static int test_wc_ecc_pointFns (void)
         }
     }
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif /* USE_ECC_B_PARAM */
 #endif /* !HAVE_FIPS || HAVE_FIPS_VERSION > 2 */
 
@@ -25986,6 +26049,7 @@ static int test_wc_ecc_shared_secret_ssh (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -26218,6 +26282,7 @@ static int test_wc_ecc_mulmod (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_ecc_free(&key1);
     wc_ecc_free(&key2);
@@ -26281,6 +26346,7 @@ static int test_wc_ecc_is_valid_idx (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     if (wc_FreeRng(&rng) && ret == 0) {
         ret = WOLFSSL_FATAL_ERROR;
@@ -26328,6 +26394,7 @@ static int test_wc_ecc_get_curve_id_from_oid (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
 #endif
     return ret;
@@ -26362,7 +26429,8 @@ static int test_wc_ecc_sig_size_calc (void)
             ret = 0;
         }
     }
-     printf(resultFmt, ret == 0 ? passed : failed);
+    printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     wc_ecc_free(&key);
     wc_FreeRng(&rng);
 #endif
@@ -26415,6 +26483,7 @@ static int test_ToTraditional (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_ToTraditional*/
@@ -26496,6 +26565,7 @@ static int test_wc_EccPrivateKeyToDer (void)
     wc_FreeRng(&rng);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_wc_EccPrivateKeyToDer*/
@@ -26580,18 +26650,19 @@ static int test_wc_Ed25519KeyToDer (void)
             }
         }
         if (ret == 0) {
-            ret = wc_Ed25519KeyToDer(&ed25519Key, NULL, inLen);
-            if (ret == BAD_FUNC_ARG) {
-                ret = 0;
-            }
-        }
-        if (ret == 0) {
             ret = wc_Ed25519KeyToDer(&ed25519Key, output, 0);
             if (ret == BAD_FUNC_ARG) {
                 ret = 0;
             }
         }
-        /* Good Case */
+        /* Good Cases */
+        if (ret == 0) {
+            /* length only */
+            ret = wc_Ed25519KeyToDer(&ed25519Key, NULL, inLen);
+            if (ret > 0) {
+                ret = 0;
+            }
+        }
         if (ret == 0) {
             ret = wc_Ed25519KeyToDer(&ed25519Key, output, inLen);
             if (ret > 0) {
@@ -26603,6 +26674,7 @@ static int test_wc_Ed25519KeyToDer (void)
     wc_FreeRng(&rng);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_wc_Ed25519KeyToDer*/
@@ -26646,18 +26718,19 @@ static int test_wc_Ed25519PrivateKeyToDer (void)
             }
         }
         if (ret == 0) {
-            ret = wc_Ed25519PrivateKeyToDer(&ed25519PrivKey, NULL, inLen);
-            if (ret == BAD_FUNC_ARG) {
-                ret = 0;
-            }
-        }
-        if (ret == 0) {
             ret = wc_Ed25519PrivateKeyToDer(&ed25519PrivKey, output, 0);
             if (ret == BAD_FUNC_ARG) {
                 ret = 0;
             }
         }
-        /* Good Case */
+        /* Good Cases */
+        if (ret == 0) {
+            /* length only */
+            ret = wc_Ed25519PrivateKeyToDer(&ed25519PrivKey, NULL, inLen);
+            if (ret > 0) {
+                ret = 0;
+            }
+        }
         if (ret == 0) {
             ret = wc_Ed25519PrivateKeyToDer(&ed25519PrivKey, output, inLen);
             if (ret > 0) {
@@ -26669,6 +26742,7 @@ static int test_wc_Ed25519PrivateKeyToDer (void)
     wc_FreeRng(&rng);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_wc_Ed25519PrivateKeyToDer*/
@@ -26711,18 +26785,19 @@ static int test_wc_Ed448KeyToDer (void)
             }
         }
         if (ret == 0) {
-            ret = wc_Ed448KeyToDer(&ed448Key, NULL, inLen);
-            if (ret == BAD_FUNC_ARG) {
-                ret = 0;
-            }
-        }
-        if (ret == 0) {
             ret = wc_Ed448KeyToDer(&ed448Key, output, 0);
             if (ret == BAD_FUNC_ARG) {
                 ret = 0;
             }
         }
-        /* Good Case */
+        /* Good Cases */
+        if (ret == 0) {
+            /* length only */
+            ret = wc_Ed448KeyToDer(&ed448Key, NULL, inLen);
+            if (ret > 0) {
+                ret = 0;
+            }
+        }
         if (ret == 0) {
             ret = wc_Ed448KeyToDer(&ed448Key, output, inLen);
             if (ret > 0) {
@@ -26734,6 +26809,7 @@ static int test_wc_Ed448KeyToDer (void)
     wc_FreeRng(&rng);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_wc_Ed448KeyToDer*/
@@ -26776,18 +26852,19 @@ static int test_wc_Ed448PrivateKeyToDer (void)
             }
         }
         if (ret == 0) {
-            ret = wc_Ed448PrivateKeyToDer(&ed448PrivKey, NULL, inLen);
-            if (ret == BAD_FUNC_ARG) {
-                ret = 0;
-            }
-        }
-        if (ret == 0) {
             ret = wc_Ed448PrivateKeyToDer(&ed448PrivKey, output, 0);
             if (ret == BAD_FUNC_ARG) {
                 ret = 0;
             }
         }
-        /* Good case */
+        /* Good cases */
+        if (ret == 0) {
+            /* length only */
+            ret = wc_Ed448PrivateKeyToDer(&ed448PrivKey, NULL, inLen);
+            if (ret > 0) {
+                ret = 0;
+            }
+        }
         if (ret == 0) {
             ret = wc_Ed448PrivateKeyToDer(&ed448PrivKey, output, inLen);
             if (ret > 0) {
@@ -26799,6 +26876,7 @@ static int test_wc_Ed448PrivateKeyToDer (void)
     wc_FreeRng(&rng);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_wc_Ed448PrivateKeyToDer*/
@@ -26847,6 +26925,7 @@ static int test_wc_SetSubjectBuffer (void)
     }
     XFREE(der, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER);
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_wc_SetSubjectBuffer*/
@@ -26938,6 +27017,7 @@ static int test_wc_SetSubjectKeyIdFromPublicKey_ex (void)
 #endif
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_FreeRng(&rng);
 #endif
@@ -27030,6 +27110,7 @@ static int test_wc_SetAuthKeyIdFromPublicKey_ex (void)
 #endif
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     wc_FreeRng(&rng);
 #endif /*defined(WOLFSSL_CERT_EXT) && defined(WOLFSSL_CERT_GEN)*/
@@ -29365,6 +29446,7 @@ static int test_wc_SignatureGetSize_ecc(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     #endif /* NO_SIG_WRAPPER */
     return ret;
 }/* END test_wc_SignatureGetSize_ecc() */
@@ -29633,6 +29715,7 @@ static int test_wc_HashSetFlags(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
 #endif
     return ret;
@@ -29735,6 +29818,7 @@ static int test_wc_HashGetFlags(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
 #endif
     return ret;
@@ -32035,7 +32119,7 @@ static void test_wolfSSL_PEM_PUBKEY(void)
 
         file = XFOPEN(fname, "rb");
         AssertTrue((file != XBADFILE));
-        XFSEEK(file, 0, XSEEK_END);
+        AssertIntGE(XFSEEK(file, 0, XSEEK_END), 0);
         sz = XFTELL(file);
         XREWIND(file);
         AssertNotNull(buf = (byte*)XMALLOC(sz, NULL, DYNAMIC_TYPE_FILE));
@@ -35402,90 +35486,110 @@ static void test_generate_cookie(void)
 
 static void test_wolfSSL_set_options(void)
 {
-#if defined(OPENSSL_EXTRA) && !defined(NO_CERTS) && \
-   !defined(NO_FILESYSTEM) && !defined(NO_RSA)
-    SSL*     ssl;
-    SSL_CTX* ctx;
+#if !defined(NO_CERTS) && !defined(NO_FILESYSTEM) && !defined(NO_RSA)
+    WOLFSSL*     ssl;
+    WOLFSSL_CTX* ctx;
+#if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
     char appData[] = "extra msg";
-
+#endif
+#ifdef OPENSSL_EXTRA
     unsigned char protos[] = {
         7, 't', 'l', 's', '/', '1', '.', '2',
         8, 'h', 't', 't', 'p', '/', '1', '.', '1'
     };
     unsigned int len = sizeof(protos);
-
     void *arg = (void *)TEST_ARG;
+#endif
 
     printf(testingFmt, "wolfSSL_set_options()");
 
 #ifndef NO_WOLFSSL_SERVER
-    AssertNotNull(ctx = SSL_CTX_new(wolfSSLv23_server_method()));
+    AssertNotNull(ctx = wolfSSL_CTX_new(wolfSSLv23_server_method()));
 #else
-    AssertNotNull(ctx = SSL_CTX_new(wolfSSLv23_client_method()));
+    AssertNotNull(ctx = wolfSSL_CTX_new(wolfSSLv23_client_method()));
 #endif
-    AssertTrue(SSL_CTX_use_certificate_file(ctx, svrCertFile, SSL_FILETYPE_PEM));
-    AssertTrue(SSL_CTX_use_PrivateKey_file(ctx, svrKeyFile, SSL_FILETYPE_PEM));
+    AssertTrue(wolfSSL_CTX_use_certificate_file(ctx, svrCertFile,
+                                                WOLFSSL_FILETYPE_PEM));
+    AssertTrue(wolfSSL_CTX_use_PrivateKey_file(ctx, svrKeyFile,
+                                               WOLFSSL_FILETYPE_PEM));
 
-    AssertTrue(SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1) == SSL_OP_NO_TLSv1);
-    AssertTrue(SSL_CTX_get_options(ctx) == SSL_OP_NO_TLSv1);
+    AssertTrue(wolfSSL_CTX_set_options(ctx, WOLFSSL_OP_NO_TLSv1)
+               == WOLFSSL_OP_NO_TLSv1);
+    AssertTrue(wolfSSL_CTX_get_options(ctx) == WOLFSSL_OP_NO_TLSv1);
 
-    AssertIntGT((int)SSL_CTX_set_options(ctx, (SSL_OP_COOKIE_EXCHANGE |
-                                                              SSL_OP_NO_SSLv2)), 0);
-    AssertTrue((SSL_CTX_set_options(ctx, SSL_OP_COOKIE_EXCHANGE) &
-                                 SSL_OP_COOKIE_EXCHANGE) == SSL_OP_COOKIE_EXCHANGE);
-    AssertTrue((SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1_2) &
-                                           SSL_OP_NO_TLSv1_2) == SSL_OP_NO_TLSv1_2);
-    AssertTrue((SSL_CTX_set_options(ctx, SSL_OP_NO_COMPRESSION) &
-                                   SSL_OP_NO_COMPRESSION) == SSL_OP_NO_COMPRESSION);
-    AssertNull((SSL_CTX_clear_options(ctx, SSL_OP_NO_COMPRESSION) &
-                                               SSL_OP_NO_COMPRESSION));
+    AssertIntGT((int)wolfSSL_CTX_set_options(ctx, (WOLFSSL_OP_COOKIE_EXCHANGE |
+                WOLFSSL_OP_NO_SSLv2)), 0);
+    AssertTrue((wolfSSL_CTX_set_options(ctx, WOLFSSL_OP_COOKIE_EXCHANGE) &
+                WOLFSSL_OP_COOKIE_EXCHANGE) == WOLFSSL_OP_COOKIE_EXCHANGE);
+    AssertTrue((wolfSSL_CTX_set_options(ctx, WOLFSSL_OP_NO_TLSv1_2) &
+                WOLFSSL_OP_NO_TLSv1_2) == WOLFSSL_OP_NO_TLSv1_2);
+    AssertTrue((wolfSSL_CTX_set_options(ctx, WOLFSSL_OP_NO_COMPRESSION) &
+                WOLFSSL_OP_NO_COMPRESSION) == WOLFSSL_OP_NO_COMPRESSION);
+    AssertFalse((wolfSSL_CTX_clear_options(ctx, WOLFSSL_OP_NO_COMPRESSION) &
+                                           WOLFSSL_OP_NO_COMPRESSION));
 
-    SSL_CTX_free(ctx);
+    wolfSSL_CTX_free(ctx);
 
 #ifndef NO_WOLFSSL_SERVER
-    ctx = SSL_CTX_new(wolfSSLv23_server_method());
+    ctx = wolfSSL_CTX_new(wolfSSLv23_server_method());
     AssertNotNull(ctx);
 #else
-    ctx = SSL_CTX_new(wolfSSLv23_client_method());
+    ctx = wolfSSL_CTX_new(wolfSSLv23_client_method());
     AssertNotNull(ctx);
 #endif
-    AssertTrue(SSL_CTX_use_certificate_file(ctx, svrCertFile, SSL_FILETYPE_PEM));
-    AssertTrue(SSL_CTX_use_PrivateKey_file(ctx, svrKeyFile, SSL_FILETYPE_PEM));
-    AssertTrue(SSL_CTX_set_msg_callback(ctx, msg_cb) == SSL_SUCCESS);
+    AssertTrue(wolfSSL_CTX_use_certificate_file(ctx, svrCertFile,
+                                               WOLFSSL_FILETYPE_PEM));
+    AssertTrue(wolfSSL_CTX_use_PrivateKey_file(ctx, svrKeyFile,
+                                               WOLFSSL_FILETYPE_PEM));
+#ifdef OPENSSL_EXTRA
+    AssertTrue(wolfSSL_CTX_set_msg_callback(ctx, msg_cb) == WOLFSSL_SUCCESS);
+#endif
 
-    AssertNotNull(ssl = SSL_new(ctx));
+    AssertNotNull(ssl = wolfSSL_new(ctx));
+#if defined(OPENSSL_EXTRA) || defined(OPENSSL_EXTRA_X509_SMALL)
 #ifdef HAVE_EX_DATA
-    AssertIntEQ(SSL_set_app_data(ssl, (void*)appData), SSL_SUCCESS);
-    AssertNotNull(SSL_get_app_data((const WOLFSSL*)ssl));
+    AssertIntEQ(wolfSSL_set_app_data(ssl, (void*)appData), WOLFSSL_SUCCESS);
+    AssertNotNull(wolfSSL_get_app_data((const WOLFSSL*)ssl));
     if (ssl) {
-        AssertIntEQ(XMEMCMP(SSL_get_app_data((const WOLFSSL*)ssl),
+        AssertIntEQ(XMEMCMP(wolfSSL_get_app_data((const WOLFSSL*)ssl),
                     appData, sizeof(appData)), 0);
     }
 #else
-    AssertIntEQ(SSL_set_app_data(ssl, (void*)appData), SSL_FAILURE);
-    AssertNull(SSL_get_app_data((const WOLFSSL*)ssl));
+    AssertIntEQ(wolfSSL_set_app_data(ssl, (void*)appData), WOLFSSL_FAILURE);
+    AssertNull(wolfSSL_get_app_data((const WOLFSSL*)ssl));
+#endif
 #endif
 
-    AssertTrue(SSL_set_options(ssl, SSL_OP_NO_TLSv1) == SSL_OP_NO_TLSv1);
-    AssertTrue(SSL_get_options(ssl) == SSL_OP_NO_TLSv1);
+    AssertTrue(wolfSSL_set_options(ssl, WOLFSSL_OP_NO_TLSv1) ==
+                                   WOLFSSL_OP_NO_TLSv1);
 
-    AssertIntGT((int)SSL_set_options(ssl, (SSL_OP_COOKIE_EXCHANGE |
-                                                          WOLFSSL_OP_NO_SSLv2)), 0);
-    AssertTrue((SSL_set_options(ssl, SSL_OP_COOKIE_EXCHANGE) &
-                             SSL_OP_COOKIE_EXCHANGE) == SSL_OP_COOKIE_EXCHANGE);
-    AssertTrue((SSL_set_options(ssl, SSL_OP_NO_TLSv1_2) &
-                                       SSL_OP_NO_TLSv1_2) == SSL_OP_NO_TLSv1_2);
-    AssertTrue((SSL_set_options(ssl, SSL_OP_NO_COMPRESSION) &
-                               SSL_OP_NO_COMPRESSION) == SSL_OP_NO_COMPRESSION);
-    AssertNull((SSL_clear_options(ssl, SSL_OP_NO_COMPRESSION) &
-                                       SSL_OP_NO_COMPRESSION));
+    AssertTrue(wolfSSL_get_options(ssl) == WOLFSSL_OP_NO_TLSv1);
 
-    AssertTrue(SSL_set_msg_callback(ssl, msg_cb) == SSL_SUCCESS);
-    SSL_set_msg_callback_arg(ssl, arg);
+    AssertIntGT((int)wolfSSL_set_options(ssl, (WOLFSSL_OP_COOKIE_EXCHANGE |
+                                         WOLFSSL_OP_NO_SSLv2)), 0);
+
+    AssertTrue((wolfSSL_set_options(ssl, WOLFSSL_OP_COOKIE_EXCHANGE) &
+                WOLFSSL_OP_COOKIE_EXCHANGE) == WOLFSSL_OP_COOKIE_EXCHANGE);
+
+    AssertTrue((wolfSSL_set_options(ssl, WOLFSSL_OP_NO_TLSv1_2) &
+                WOLFSSL_OP_NO_TLSv1_2) == WOLFSSL_OP_NO_TLSv1_2);
+
+    AssertTrue((wolfSSL_set_options(ssl, WOLFSSL_OP_NO_COMPRESSION) &
+               WOLFSSL_OP_NO_COMPRESSION) == WOLFSSL_OP_NO_COMPRESSION);
+
+#ifdef OPENSSL_EXTRA
+    AssertNull((wolfSSL_clear_options(ssl, WOLFSSL_OP_NO_COMPRESSION) &
+                                      WOLFSSL_OP_NO_COMPRESSION));
+#endif
+
+#ifdef OPENSSL_EXTRA
+    AssertTrue(wolfSSL_set_msg_callback(ssl, msg_cb) == WOLFSSL_SUCCESS);
+    wolfSSL_set_msg_callback_arg(ssl, arg);
 #ifdef WOLFSSL_ERROR_CODE_OPENSSL
-    AssertTrue(SSL_CTX_set_alpn_protos(ctx, protos, len) == 0);
+    AssertTrue(wolfSSL_CTX_set_alpn_protos(ctx, protos, len) == 0);
 #else
-    AssertTrue(SSL_CTX_set_alpn_protos(ctx, protos, len) == SSL_SUCCESS);
+    AssertTrue(wolfSSL_CTX_set_alpn_protos(ctx, protos, len) == WOLFSSL_SUCCESS);
+#endif
 #endif
 
 #if defined(WOLFSSL_NGINX) || defined(WOLFSSL_HAPROXY) || \
@@ -35495,20 +35599,19 @@ static void test_wolfSSL_set_options(void)
 #if defined(HAVE_ALPN) && !defined(NO_BIO)
 
 #ifdef WOLFSSL_ERROR_CODE_OPENSSL
-    AssertTrue(SSL_set_alpn_protos(ssl, protos, len) == 0);
+    AssertTrue(wolfSSL_set_alpn_protos(ssl, protos, len) == 0);
 #else
-    AssertTrue(SSL_set_alpn_protos(ssl, protos, len) == SSL_SUCCESS);
+    AssertTrue(wolfSSL_set_alpn_protos(ssl, protos, len) == WOLFSSL_SUCCESS);
 #endif
 
 #endif /* HAVE_ALPN && !NO_BIO */
 #endif
 
-    SSL_free(ssl);
-    SSL_CTX_free(ctx);
+    wolfSSL_free(ssl);
+    wolfSSL_CTX_free(ctx);
 
     printf(resultFmt, passed);
-#endif /* defined(OPENSSL_EXTRA) && !defined(NO_CERTS) && \
-         !defined(NO_FILESYSTEM) && !defined(NO_RSA) */
+#endif /* !defined(NO_CERTS) && !defined(NO_FILESYSTEM) && !defined(NO_RSA) */
 }
 
 static void test_wolfSSL_sk_SSL_CIPHER(void)
@@ -38068,6 +38171,7 @@ static int test_WOLFSSL_ERROR_MSG (void)
     WOLFSSL_ERROR_MSG(msg);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
 #endif
     return ret;
@@ -38085,6 +38189,7 @@ static int test_wc_ERR_remove_state (void)
     wc_ERR_remove_state();
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
 #endif
     return ret;
@@ -38120,6 +38225,7 @@ static int test_wc_ERR_print_errors_fp (void)
     #endif
 #endif
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     XFCLOSE(fp);
     (void)sz;
 #endif
@@ -38175,6 +38281,7 @@ static int test_wolfSSL_GetLoggingCb (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     return ret;
 }/*End test_wolfSSL_GetLoggingCb*/
@@ -46157,6 +46264,7 @@ static void test_wolfSSL_X509_cmp(void)
     ret = wolfSSL_X509_cmp(cert1, cert1);
     AssertIntEQ(0, wolfSSL_X509_cmp(cert1, cert1));
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 
     printf(testingFmt, "wolfSSL_X509_cmp() testing mismatched certs");
     ret = wolfSSL_X509_cmp(cert1, cert2);
@@ -47079,6 +47187,58 @@ static void test_wc_ParseCert(void)
     AssertNull(decodedCert.altEmailNames);
 #endif
     wc_FreeDecodedCert(&decodedCert);
+
+    printf(resultFmt, passed);
+#endif
+}
+
+static void test_MakeCertWithPathLen(void)
+{
+#if defined(WOLFSSL_CERT_REQ) && defined(WOLFSSL_CERT_GEN) && defined(HAVE_ECC)
+    const byte expectedPathLen = 7;
+    Cert cert;
+    DecodedCert decodedCert;
+    byte der[FOURK_BUF];
+    int derSize = 0;
+    WC_RNG rng;
+    ecc_key key;
+
+    printf(testingFmt, "test_MakeCertWithPathLen");
+
+    AssertIntEQ(wc_InitRng(&rng), 0);
+    AssertIntEQ(wc_ecc_init(&key), 0);
+    AssertIntEQ(wc_ecc_make_key(&rng, 32, &key), 0);
+    AssertIntEQ(wc_InitCert(&cert), 0);
+
+    (void)XSTRNCPY(cert.subject.country, "US", CTC_NAME_SIZE);
+    (void)XSTRNCPY(cert.subject.state, "state", CTC_NAME_SIZE);
+    (void)XSTRNCPY(cert.subject.locality, "Bozeman", CTC_NAME_SIZE);
+    (void)XSTRNCPY(cert.subject.org, "yourOrgNameHere", CTC_NAME_SIZE);
+    (void)XSTRNCPY(cert.subject.unit, "yourUnitNameHere", CTC_NAME_SIZE);
+    (void)XSTRNCPY(cert.subject.commonName, "www.yourDomain.com", CTC_NAME_SIZE);
+    (void)XSTRNCPY(cert.subject.email, "yourEmail@yourDomain.com", CTC_NAME_SIZE);
+
+    cert.selfSigned = 1;
+    cert.isCA       = 1;
+    cert.pathLen    = expectedPathLen;
+    cert.sigType    = CTC_SHA256wECDSA;
+
+#ifdef WOLFSSL_CERT_EXT
+    cert.keyUsage |= KEYUSE_KEY_CERT_SIGN;
+#endif
+
+    AssertIntGE(wc_MakeCert(&cert, der, FOURK_BUF, NULL, &key, &rng), 0);
+    derSize = wc_SignCert(cert.bodySz, cert.sigType, der, FOURK_BUF, NULL,
+                          &key, &rng);
+    AssertIntGE(derSize, 0);
+
+    wc_InitDecodedCert(&decodedCert, der, derSize, NULL);
+    AssertIntEQ(wc_ParseCert(&decodedCert, CERT_TYPE, NO_VERIFY, NULL), 0);
+    AssertIntEQ(decodedCert.pathLength, expectedPathLen);
+
+    wc_FreeDecodedCert(&decodedCert);
+    AssertIntEQ(wc_ecc_free(&key), 0);
+    AssertIntEQ(wc_FreeRng(&rng), 0);
 
     printf(resultFmt, passed);
 #endif
@@ -49533,6 +49693,7 @@ static int test_get_rand_digit (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 
@@ -49559,6 +49720,7 @@ static int test_get_digit_count (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     mp_clear(&a);
 #endif
     return ret;
@@ -49609,6 +49771,7 @@ static int test_mp_cond_copy (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     mp_clear(&a);
     mp_clear(&b);
 #endif
@@ -49658,6 +49821,7 @@ static int test_mp_rand (void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     mp_clear(&a);
     wc_FreeRng(&rng);
 #endif
@@ -49701,6 +49865,7 @@ static int test_get_digit (void)
 
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     mp_clear(&a);
 #endif
     return ret;
@@ -49760,6 +49925,7 @@ static int test_wc_export_int(void)
     }
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
     mp_clear(&mp);
 #endif
     return ret;
@@ -49785,6 +49951,7 @@ static int test_wc_InitRngNonce(void)
     wc_FreeRng(&rng);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/* End test_wc_InitRngNonce*/
@@ -49810,6 +49977,7 @@ static int test_wc_InitRngNonce_ex(void)
     wc_FreeRng(&rng);
 
     printf(resultFmt, ret == 0 ? passed : failed);
+    fflush(stdout);
 #endif
     return ret;
 }/*End test_wc_InitRngNonce_ex*/
@@ -49889,6 +50057,7 @@ static void test_wolfSSL_X509_CRL(void)
 #endif
 
     printf(resultFmt, passed);
+    fflush(stdout);
 #endif
         return;
 }
@@ -51987,7 +52156,7 @@ static void test_wolfSSL_RSA_verify(void)
     /* read privete key file */
     fp = XFOPEN(svrKeyFile, "rb");
     AssertTrue((fp != XBADFILE));
-    XFSEEK(fp, 0, XSEEK_END);
+    AssertIntGE(XFSEEK(fp, 0, XSEEK_END), 0);
     sz = XFTELL(fp);
     XREWIND(fp);
     AssertNotNull(buf = (byte*)XMALLOC(sz, NULL, DYNAMIC_TYPE_FILE));
@@ -52764,7 +52933,7 @@ static void test_wolfSSL_RSA_To_Der(void)
     AssertIntEQ(wolfSSL_RSA_To_Der(rsa, &outDer, 0, HEAP_HINT), privDerSz);
     AssertNotNull(outDer);
     AssertIntEQ(XMEMCMP(outDer, privDer, privDerSz), 0);
-    XFREE(outDer, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER.);
+    XFREE(outDer, HEAP_HINT, DYNAMIC_TYPE_TMP_BUFFER);
 
     AssertIntEQ(wolfSSL_RSA_To_Der(rsa, NULL, 1, HEAP_HINT), pubDerSz);
     outDer = out;
@@ -55638,6 +55807,7 @@ static void test_wolfSSL_DtlsUpdateWindow(void)
     DUW_TEST(152, 0xFFFFFFFF, next_hi, next_lo, window, 153, 0, 0, 0x01);
 
     printf(resultFmt, passed);
+    fflush(stdout);
 }
 #endif /* WOLFSSL_DTLS */
 
@@ -55651,6 +55821,7 @@ void ApiTest(void)
     AssertTrue(test_fileAccess());
 
     printf(" Begin API Tests\n");
+    fflush(stdout);
     AssertIntEQ(test_wolfSSL_Init(), WOLFSSL_SUCCESS);
     /* wolfcrypt initialization tests */
     test_wolfSSL_Method_Allocators();
@@ -56170,6 +56341,7 @@ void ApiTest(void)
     test_wc_SetSubject();
     test_CheckCertSignature();
     test_wc_ParseCert();
+    test_MakeCertWithPathLen();
 
     /* wolfCrypt ECC tests */
     test_wc_ecc_get_curve_size_from_name();
@@ -56557,5 +56729,5 @@ void ApiTest(void)
     (void)devId;
 
     printf(" End API Tests\n");
-
+    fflush(stdout);
 }

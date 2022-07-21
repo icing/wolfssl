@@ -1,6 +1,6 @@
 /* tls13.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -3357,6 +3357,11 @@ int SendTls13ClientHello(WOLFSSL* ssl)
     WOLFSSL_START(WC_FUNC_CLIENT_HELLO_SEND);
     WOLFSSL_ENTER("SendTls13ClientHello");
 
+    if (ssl == NULL) {
+        return BAD_FUNC_ARG;
+    }
+
+    ssl->options.buildingMsg = 1;
     major = SSLv3_MAJOR;
     tls12minor = TLSv1_2_MINOR;
 
@@ -3366,10 +3371,6 @@ int SendTls13ClientHello(WOLFSSL* ssl)
         tls12minor = DTLSv1_2_MINOR;
     }
 #endif /* WOLFSSL_DTLS */
-
-    if (ssl == NULL) {
-        return BAD_FUNC_ARG;
-    }
 
 #ifdef HAVE_SESSION_TICKET
     if (ssl->options.resuming &&
@@ -3638,6 +3639,7 @@ int SendTls13ClientHello(WOLFSSL* ssl)
     }
 #endif
 
+    ssl->options.buildingMsg = 0;
 #ifdef WOLFSSL_DTLS13
     if (ssl->options.dtls) {
         ret = Dtls13HandshakeSend(ssl, args->output, args->sendSz,
@@ -5641,6 +5643,7 @@ int SendTls13ServerHello(WOLFSSL* ssl, byte extMsgType)
             return ret;
     }
 
+    ssl->options.buildingMsg = 1;
 #ifdef WOLFSSL_DTLS13
     if (ssl->options.dtls)
         idx = DTLS_RECORD_HEADER_SZ + DTLS_HANDSHAKE_HEADER_SZ;
@@ -5750,10 +5753,11 @@ int SendTls13ServerHello(WOLFSSL* ssl, byte extMsgType)
     if (extMsgType == server_hello)
         ssl->options.serverState = SERVER_HELLO_COMPLETE;
 
+    ssl->options.buildingMsg = 0;
 #ifdef WOLFSSL_DTLS13
     if (ssl->options.dtls) {
         ret =  Dtls13HandshakeSend(ssl, output, sendSz, sendSz,
-                                   server_hello, 0);
+                                   extMsgType, 0);
 
         WOLFSSL_LEAVE("SendTls13ServerHello", ret);
         WOLFSSL_END(WC_FUNC_SERVER_HELLO_SEND);
@@ -5791,6 +5795,7 @@ static int SendTls13EncryptedExtensions(WOLFSSL* ssl)
     WOLFSSL_START(WC_FUNC_ENCRYPTED_EXTENSIONS_SEND);
     WOLFSSL_ENTER("SendTls13EncryptedExtensions");
 
+    ssl->options.buildingMsg = 1;
     ssl->keys.encryptionOn = 1;
 
 #ifdef WOLFSSL_DTLS13
@@ -5891,6 +5896,7 @@ static int SendTls13EncryptedExtensions(WOLFSSL* ssl)
 
 #ifdef WOLFSSL_DTLS13
     if (ssl->options.dtls) {
+        ssl->options.buildingMsg = 0;
         ret = Dtls13HandshakeSend(ssl, output, sendSz, idx,
                                   encrypted_extensions, 1);
 
@@ -5911,7 +5917,7 @@ static int SendTls13EncryptedExtensions(WOLFSSL* ssl)
         return sendSz;
 
     ssl->buffers.outputBuffer.length += sendSz;
-
+    ssl->options.buildingMsg = 0;
     ssl->options.serverState = SERVER_ENCRYPTED_EXTENSIONS_COMPLETE;
 
     if (!ssl->options.groupMessages)
@@ -5947,6 +5953,8 @@ static int SendTls13CertificateRequest(WOLFSSL* ssl, byte* reqCtx,
 
     WOLFSSL_START(WC_FUNC_CERTIFICATE_REQUEST_SEND);
     WOLFSSL_ENTER("SendTls13CertificateRequest");
+
+    ssl->options.buildingMsg = 1;
 
     if (ssl->options.side == WOLFSSL_SERVER_END)
         InitSuitesHashSigAlgo(ssl->suites, 1, 1, 1,
@@ -5999,6 +6007,7 @@ static int SendTls13CertificateRequest(WOLFSSL* ssl, byte* reqCtx,
 
 #ifdef WOLFSSL_DTLS13
     if (ssl->options.dtls) {
+        ssl->options.buildingMsg = 0;
         ret =
             Dtls13HandshakeSend(ssl, output, sendSz, i, certificate_request, 1);
 
@@ -6026,6 +6035,7 @@ static int SendTls13CertificateRequest(WOLFSSL* ssl, byte* reqCtx,
     #endif
 
     ssl->buffers.outputBuffer.length += sendSz;
+    ssl->options.buildingMsg = 0;
     if (!ssl->options.groupMessages)
         ret = SendBuffered(ssl);
 
@@ -6531,6 +6541,8 @@ static int SendTls13Certificate(WOLFSSL* ssl)
     WOLFSSL_START(WC_FUNC_CERTIFICATE_SEND);
     WOLFSSL_ENTER("SendTls13Certificate");
 
+    ssl->options.buildingMsg = 1;
+
 #ifdef WOLFSSL_POST_HANDSHAKE_AUTH
     if (ssl->options.side == WOLFSSL_CLIENT_END && ssl->certReqCtx != NULL) {
         certReqCtxLen = ssl->certReqCtx->len;
@@ -6631,8 +6643,6 @@ static int SendTls13Certificate(WOLFSSL* ssl)
             sendSz = (int)i;
         }
 #endif /* WOLFSSL_DTLS13 */
-
-        ssl->options.buildingMsg = 1;
 
         if (ssl->fragOffset == 0) {
             if (headerSz + certSz + extSz + certChainSz <=
@@ -6749,6 +6759,7 @@ static int SendTls13Certificate(WOLFSSL* ssl)
 #ifdef WOLFSSL_DTLS13
         if (ssl->options.dtls) {
             /* DTLS1.3 uses a separate variable and logic for fragments */
+            ssl->options.buildingMsg = 0;
             ssl->fragOffset = 0;
             ret = Dtls13HandshakeSend(ssl, output, sendSz, i, certificate, 1);
         }
@@ -6772,6 +6783,7 @@ static int SendTls13Certificate(WOLFSSL* ssl)
 #endif
 
             ssl->buffers.outputBuffer.length += sendSz;
+            ssl->options.buildingMsg = 0;
             if (!ssl->options.groupMessages)
                 ret = SendBuffered(ssl);
         }
@@ -6854,6 +6866,8 @@ static int SendTls13CertificateVerify(WOLFSSL* ssl)
 
     WOLFSSL_START(WC_FUNC_CERTIFICATE_VERIFY_SEND);
     WOLFSSL_ENTER("SendTls13CertificateVerify");
+
+    ssl->options.buildingMsg = 1;
 
 #if defined(WOLFSSL_RENESAS_TSIP_TLS) && (WOLFSSL_RENESAS_TSIP_VER >= 115)
     ret = tsip_Tls13SendCertVerify(ssl);
@@ -7217,6 +7231,7 @@ static int SendTls13CertificateVerify(WOLFSSL* ssl)
         {
 #ifdef WOLFSSL_DTLS13
             if (ssl->options.dtls) {
+                ssl->options.buildingMsg = 0;
                 ret = Dtls13HandshakeSend(ssl, args->output,
                     MAX_CERT_VERIFY_SZ + MAX_MSG_EXTRA + MAX_MSG_EXTRA,
                     args->sendSz, certificate_verify, 1);
@@ -7252,7 +7267,7 @@ static int SendTls13CertificateVerify(WOLFSSL* ssl)
         #endif
 
             ssl->buffers.outputBuffer.length += args->sendSz;
-
+            ssl->options.buildingMsg = 0;
             if (!ssl->options.groupMessages)
                 ret = SendBuffered(ssl);
             break;
@@ -7988,6 +8003,7 @@ static int SendTls13Finished(WOLFSSL* ssl)
     WOLFSSL_START(WC_FUNC_FINISHED_SEND);
     WOLFSSL_ENTER("SendTls13Finished");
 
+    ssl->options.buildingMsg = 1;
 #ifdef WOLFSSL_DTLS13
     if (ssl->options.dtls) {
         headerSz = DTLS_HANDSHAKE_HEADER_SZ;
@@ -8090,6 +8106,7 @@ static int SendTls13Finished(WOLFSSL* ssl)
     #endif
 
     ssl->buffers.outputBuffer.length += sendSz;
+    ssl->options.buildingMsg = 0;
     }
 
     if (ssl->options.side == WOLFSSL_SERVER_END) {
@@ -8436,6 +8453,7 @@ static int SendTls13EndOfEarlyData(WOLFSSL* ssl)
 
     length = 0;
     sendSz = idx + length + MAX_MSG_EXTRA;
+    ssl->options.buildingMsg = 1;
 
     /* Check buffers are big enough and grow if needed. */
     if ((ret = CheckAvailableSize(ssl, sendSz)) != 0)
@@ -8459,6 +8477,7 @@ static int SendTls13EndOfEarlyData(WOLFSSL* ssl)
     if ((ret = SetKeysSide(ssl, ENCRYPT_SIDE_ONLY)) != 0)
         return ret;
 
+    ssl->options.buildingMsg = 0;
     if (!ssl->options.groupMessages)
         ret = SendBuffered(ssl);
 
@@ -9497,9 +9516,6 @@ int DoTls13HandShakeMsgType(WOLFSSL* ssl, byte* input, word32* inOutIdx,
     if (ret == 0 && type != client_hello && type != session_ticket &&
                                                            type != key_update) {
         ret = HashInput(ssl, input + inIdx, size);
-    }
-    if (ret == 0 && ssl->buffers.inputBuffer.dynamicFlag) {
-        ShrinkInputBuffer(ssl, NO_FORCED_FREE);
     }
 
     if (ret == BUFFER_ERROR || ret == MISSING_HANDSHAKE_DATA)

@@ -7,7 +7,7 @@
 #
 AC_COPYRIGHT([Copyright (C) 2006-2020 wolfSSL Inc.])
 AC_PREREQ([2.69])
-AC_INIT([wolfssl],[5.3.0],[https://github.com/wolfssl/wolfssl/issues],[wolfssl],[https://www.wolfssl.com])
+AC_INIT([wolfssl],[5.4.0],[https://github.com/wolfssl/wolfssl/issues],[wolfssl],[https://www.wolfssl.com])
 AC_CONFIG_AUX_DIR([build-aux])
 
 # The following sets CFLAGS to empty if unset on command line.  We do not
@@ -38,7 +38,7 @@ LT_INIT([disable-static win32-dll])
 AC_ARG_VAR(EXTRA_CFLAGS, [Extra CFLAGS to add to autoconf-computed arg list.  Can also supply directly to make.])
 
 #shared library versioning
-WOLFSSL_LIBRARY_VERSION=33:0:0
+WOLFSSL_LIBRARY_VERSION=34:0:0
 #                        | | |
 #                 +------+ | +---+
 #                 |        |     |
@@ -3073,7 +3073,7 @@ fi
 
 # ECC encrypt
 AC_ARG_ENABLE([eccencrypt],
-    [AS_HELP_STRING([--enable-eccencrypt],[Enable ECC encrypt (default: disabled). yes = SEC1 standard, iso18033 = ISO 18033 standard, old = original wolfSSL algorithm])],
+    [AS_HELP_STRING([--enable-eccencrypt],[Enable ECC encrypt (default: disabled). yes = SEC1 standard, geniv = Generate IV, iso18033 = ISO 18033 standard, old = original wolfSSL algorithm])],
     [ ENABLED_ECC_ENCRYPT=$enableval ],
     [ ENABLED_ECC_ENCRYPT=no ]
     )
@@ -3096,6 +3096,10 @@ then
     if test "$ENABLED_ECC_ENCRYPT" = "iso18033"
     then
         AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_ECIES_ISO18033"
+    fi
+    if test "$ENABLED_ECC_ENCRYPT" = "geniv"
+    then
+        AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_ECIES_GEN_IV"
     fi
 fi
 
@@ -3708,7 +3712,7 @@ then
     then
         AC_MSG_ERROR([cannot enable eccencrypt and hkdf without aes.])
     fi
-    if test "$ENABLED_AESGCM" = "yes"
+    if test "$ENABLED_AESGCM" != "no"
     then
         AC_MSG_ERROR([AESGCM requires AES.])
     fi
@@ -7845,8 +7849,8 @@ if test "x$ENABLED_LINUXKM" = "xyes"; then
     AC_SUBST([ASFLAGS_FPUSIMD_DISABLE])
     AC_SUBST([ASFLAGS_FPUSIMD_ENABLE])
 
-    if test "$ENABLED_OPENSSLEXTRA" != "no"; then
-        AC_MSG_ERROR([--enable-opensslextra is incompatible with --enable-linuxkm.])
+    if test "$ENABLED_OPENSSLEXTRA" != "no" && test "$ENABLED_CRYPTONLY" = "no"; then
+        AC_MSG_ERROR([--enable-opensslextra without --enable-cryptonly is incompatible with --enable-linuxkm.])
     fi
     if test "$ENABLED_FILESYSTEM" = "yes"; then
         AC_MSG_ERROR([--enable-filesystem is incompatible with --enable-linuxkm.])

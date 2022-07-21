@@ -1,6 +1,6 @@
 /* asn_public.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -384,6 +384,8 @@ typedef struct Cert {
     int      selfSigned;                /* self signed flag */
     CertName subject;                   /* subject info */
     int      isCA;                      /* is this going to be a CA */
+    byte     pathLen;                   /* max depth of valid certification
+                                         * paths that include this cert */
     /* internal use only */
     int      bodySz;                    /* pre sign total size */
     int      keyType;                   /* public key type of subject */

@@ -1,6 +1,6 @@
 /* internal.h
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -1317,6 +1317,7 @@ enum Misc {
     DTLS_HANDSHAKE_HEADER_SZ = 12, /* normal + seq(2) + offset(3) + length(3) */
     DTLS_RECORD_HEADER_SZ    = 13, /* normal + epoch(2) + seq_num(6) */
     DTLS_UNIFIED_HEADER_MIN_SZ = 2,
+    DTLS_RECVD_RL_HEADER_MAX_SZ = 5, /* flags + seq_number(2) + length(20)  */
     DTLS_RECORD_HEADER_MAX_SZ = 13,
     DTLS_HANDSHAKE_EXTRA     = 8,  /* diff from normal */
     DTLS_RECORD_EXTRA        = 8,  /* diff from normal */
@@ -3782,8 +3783,8 @@ typedef struct Options {
 #endif
     void*             psk_ctx;
 #endif /* NO_PSK */
-#if defined(OPENSSL_EXTRA) || defined(HAVE_WEBSERVER) || defined(WOLFSSL_WPAS_SMALL)
     unsigned long     mask; /* store SSL_OP_ flags */
+#if defined(OPENSSL_EXTRA) || defined(HAVE_WEBSERVER) || defined(WOLFSSL_WPAS_SMALL)
     word16            minProto:1; /* sets min to min available */
     word16            maxProto:1; /* sets max to max available */
 #endif
@@ -4410,7 +4411,6 @@ typedef enum EarlyDataState {
 
 typedef struct Dtls13UnifiedHdrInfo {
     word16 recordLength;
-    word16 headerLength;
     byte seqLo;
     byte seqHi;
     byte seqHiPresent:1;
@@ -4700,7 +4700,7 @@ struct WOLFSSL {
     Dtls13Epoch *dtls13DecryptEpoch;
     w64wrapper dtls13Epoch;
     w64wrapper dtls13PeerEpoch;
-
+    byte dtls13CurRL[DTLS_RECVD_RL_HEADER_MAX_SZ];
     word16 dtls13CurRlLength;
 
     /* used to store the message if it needs to be fragmented */
@@ -5518,6 +5518,7 @@ WOLFSSL_LOCAL int Dtls13RlAddPlaintextHeader(WOLFSSL* ssl, byte* out,
 WOLFSSL_LOCAL int Dtls13EncryptRecordNumber(WOLFSSL* ssl, byte* hdr,
     word16 recordLength);
 WOLFSSL_LOCAL int Dtls13IsUnifiedHeader(byte header_flags);
+WOLFSSL_LOCAL int Dtls13GetUnifiedHeaderSize(const byte input, word16* size);
 WOLFSSL_LOCAL int Dtls13ParseUnifiedRecordLayer(WOLFSSL* ssl, const byte* input,
     word16 input_size, Dtls13UnifiedHdrInfo* hdrInfo);
 WOLFSSL_LOCAL int Dtls13HandshakeSend(WOLFSSL* ssl, byte* output,

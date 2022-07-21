@@ -1,6 +1,6 @@
 /* wolfio.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -517,7 +517,7 @@ int EmbedSendTo(WOLFSSL* ssl, char *buf, int sz, void *ctx)
     const SOCKADDR_S* peer = NULL;
     XSOCKLENT peerSz = 0;
     int type;
-    XSOCKLENT length = sizeof( XSOCKLENT );
+    XSOCKLENT length = sizeof(int); /* optvalue 'type' is of size int */
 
     WOLFSSL_ENTER("EmbedSendTo()");
 
@@ -526,7 +526,7 @@ int EmbedSendTo(WOLFSSL* ssl, char *buf, int sz, void *ctx)
         /* Probably a TCP socket. peer and peerSz MUST be NULL and 0 */
     }
     else if (!dtlsCtx->connected) {
-        peer = dtlsCtx->peer.sa;
+        peer   = (const SOCKADDR_S*)dtlsCtx->peer.sa;
         peerSz = dtlsCtx->peer.sz;
     }
 

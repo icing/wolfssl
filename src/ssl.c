@@ -1,6 +1,6 @@
 /* ssl.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -522,7 +522,8 @@ WOLFSSL_CTX* wolfSSL_CTX_new_ex(WOLFSSL_METHOD* method, void* heap)
         wolfSSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
         wolfSSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
         if (wolfSSL_CTX_set_min_proto_version(ctx,
-                SSL3_VERSION) != WOLFSSL_SUCCESS ||
+                                              (method->version.major == DTLS_MAJOR) ?
+                                               DTLS1_VERSION : SSL3_VERSION) != WOLFSSL_SUCCESS ||
 #ifdef HAVE_ANON
                 wolfSSL_CTX_allow_anon_cipher(ctx) != WOLFSSL_SUCCESS ||
 #endif
@@ -4438,7 +4439,8 @@ void wolfSSL_ERR_print_errors_fp(XFILE fp, int err)
 
     WOLFSSL_ENTER("wolfSSL_ERR_print_errors_fp");
     SetErrorString(err, data);
-    XFPRINTF(fp, "%s", data);
+    if (XFPRINTF(fp, "%s", data) < 0)
+        WOLFSSL_MSG("fprintf failed in wolfSSL_ERR_print_errors_fp");
 }
 
 #if defined(OPENSSL_EXTRA) || defined(DEBUG_WOLFSSL_VERBOSE)
@@ -5490,12 +5492,14 @@ int wolfSSL_Init(void)
         }
 
 #ifdef HAVE_GLOBAL_RNG
-        if ((ret == WOLFSSL_SUCCESS) && (wc_InitMutex(&globalRNGMutex) != 0)) {
-            WOLFSSL_MSG("Bad Init Mutex rng");
-            ret = BAD_MUTEX_E;
-        }
-        else {
-            globalRNGMutex_valid = 1;
+        if (ret == WOLFSSL_SUCCESS) {
+            if (wc_InitMutex(&globalRNGMutex) != 0) {
+                WOLFSSL_MSG("Bad Init Mutex rng");
+                ret = BAD_MUTEX_E;
+            }
+            else {
+                globalRNGMutex_valid = 1;
+            }
         }
 #endif
 
@@ -5531,33 +5535,37 @@ int wolfSSL_Init(void)
             }
         }
     #else
-        if ((ret == WOLFSSL_SUCCESS) && (wc_InitMutex(&session_mutex) != 0)) {
-            WOLFSSL_MSG("Bad Init Mutex session");
-            ret = BAD_MUTEX_E;
-        }
-        else {
-            session_mutex_valid = 1;
+        if (ret == WOLFSSL_SUCCESS) {
+            if (wc_InitMutex(&session_mutex) != 0) {
+                WOLFSSL_MSG("Bad Init Mutex session");
+                ret = BAD_MUTEX_E;
+            }
+            else {
+                session_mutex_valid = 1;
+            }
         }
     #endif
     #ifndef NO_CLIENT_CACHE
-        if ((ret == WOLFSSL_SUCCESS) &&
-            (wc_InitMutex(&clisession_mutex) != 0)) {
-            WOLFSSL_MSG("Bad Init Mutex session");
-            ret = BAD_MUTEX_E;
-        }
-        else {
-            clisession_mutex_valid = 1;
+        if (ret == WOLFSSL_SUCCESS) {
+            if (wc_InitMutex(&clisession_mutex) != 0) {
+                WOLFSSL_MSG("Bad Init Mutex session");
+                ret = BAD_MUTEX_E;
+            }
+            else {
+                clisession_mutex_valid = 1;
+            }
         }
     #endif
 #endif
-        if ((ret == WOLFSSL_SUCCESS) && (wc_InitMutex(&count_mutex) != 0)) {
-            WOLFSSL_MSG("Bad Init Mutex count");
-            ret = BAD_MUTEX_E;
+        if (ret == WOLFSSL_SUCCESS) {
+            if (wc_InitMutex(&count_mutex) != 0) {
+                WOLFSSL_MSG("Bad Init Mutex count");
+                ret = BAD_MUTEX_E;
+            }
+            else {
+                count_mutex_valid = 1;
+            }
         }
-        else {
-            count_mutex_valid = 1;
-        }
-
 #if defined(OPENSSL_EXTRA) && defined(HAVE_ATEXIT)
         /* OpenSSL registers cleanup using atexit */
         if ((ret == WOLFSSL_SUCCESS) && (atexit(AtExitCleanup) != 0)) {
@@ -5567,13 +5575,15 @@ int wolfSSL_Init(void)
 #endif
     }
 
-    if ((ret == WOLFSSL_SUCCESS) && (wc_LockMutex(&count_mutex) != 0)) {
-        WOLFSSL_MSG("Bad Lock Mutex count");
-        ret = BAD_MUTEX_E;
-    }
-    else {
-        initRefCount++;
-        wc_UnLockMutex(&count_mutex);
+    if (ret == WOLFSSL_SUCCESS) {
+        if (wc_LockMutex(&count_mutex) != 0) {
+            WOLFSSL_MSG("Bad Lock Mutex count");
+            ret = BAD_MUTEX_E;
+        }
+        else {
+            initRefCount++;
+            wc_UnLockMutex(&count_mutex);
+        }
     }
 
     if (ret != WOLFSSL_SUCCESS) {
@@ -5583,7 +5593,6 @@ int wolfSSL_Init(void)
 
     return ret;
 }
-
 
 
 #ifndef NO_CERTS
@@ -15862,7 +15871,6 @@ cleanup:
     }
 
 #ifdef OPENSSL_EXTRA
-
     void wolfSSL_CTX_set_tmp_rsa_callback(WOLFSSL_CTX* ctx,
                                       WOLFSSL_RSA*(*f)(WOLFSSL*, int, int))
     {
@@ -15883,7 +15891,7 @@ cleanup:
         ssl->options.sentNotify =  (opt&WOLFSSL_SENT_SHUTDOWN) > 0;
         ssl->options.closeNotify = (opt&WOLFSSL_RECEIVED_SHUTDOWN) > 0;
     }
-
+#endif
 
     long wolfSSL_CTX_get_options(WOLFSSL_CTX* ctx)
     {
@@ -15893,8 +15901,6 @@ cleanup:
             return BAD_FUNC_ARG;
         return ctx->mask;
     }
-
-#endif
 
     static long wolf_set_options(long old_op, long op);
     long wolfSSL_CTX_set_options(WOLFSSL_CTX* ctx, long opt)
@@ -15909,8 +15915,6 @@ cleanup:
         return ctx->mask;
     }
 
-#ifdef OPENSSL_EXTRA
-
     long wolfSSL_CTX_clear_options(WOLFSSL_CTX* ctx, long opt)
     {
         WOLFSSL_ENTER("SSL_CTX_clear_options");
@@ -15919,6 +15923,8 @@ cleanup:
         ctx->mask &= ~opt;
         return ctx->mask;
     }
+
+#ifdef OPENSSL_EXTRA
 
     int wolfSSL_set_rfd(WOLFSSL* ssl, int rfd)
     {
@@ -16234,8 +16240,13 @@ cleanup:
         ret = wc_PeekErrorNode(0, &file, &reason, &line);
         if (ret >= 0) {
             const char* r = wolfSSL_ERR_reason_error_string(0 - ret);
-            XSNPRINTF(buf, sizeof(buf), "error:%d:wolfSSL library:%s:%s:%d\n",
-                    ret, r, file, line);
+            if (XSNPRINTF(buf, sizeof(buf),
+                          "error:%d:wolfSSL library:%s:%s:%d\n",
+                          ret, r, file, line)
+                >= (int)sizeof(buf))
+            {
+                WOLFSSL_MSG("Buffer overrun formatting error message");
+            }
             wolfSSL_BIO_write(bio, buf, (int)XSTRLEN(buf));
             wc_RemoveErrorNode(0);
         }
@@ -16931,6 +16942,7 @@ WOLFSSL_API int wolfSSL_CTX_get_min_proto_version(WOLFSSL_CTX* ctx)
  * returns WOLFSSL_FATAL_ERROR on no match */
 static int GetMaxProtoVersion(long options)
 {
+#ifndef NO_TLS
 #ifdef WOLFSSL_TLS13
     if (!(options & WOLFSSL_OP_NO_TLSv1_3))
         return TLS1_3_VERSION;
@@ -16951,7 +16963,9 @@ static int GetMaxProtoVersion(long options)
         return SSL3_VERSION;
     #endif
 #endif
-
+#else
+    (void)options;
+#endif /* NO_TLS */
     return WOLFSSL_FATAL_ERROR;
 }
 
@@ -19487,10 +19501,23 @@ char* wolfSSL_i2s_ASN1_STRING(WOLFSSL_v3_ext_method *method,
     XMEMSET(tmp, 0, tmpSz);
 
     for (i = 0; i < tmpSz && i < (s->length - 1); i++) {
-        XSNPRINTF(val, valSz - 1, "%02X:", str[i]);
+        if (XSNPRINTF(val, valSz, "%02X:", str[i])
+            >= valSz)
+        {
+            WOLFSSL_MSG("Buffer overrun");
+            XFREE(str, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+            return NULL;
+        }
         XSTRNCAT(tmp, val, valSz);
     }
-    XSNPRINTF(val, valSz - 1, "%02X", str[i]);
+    if (XSNPRINTF(val, valSz, "%02X", str[i])
+        >= valSz)
+    {
+        WOLFSSL_MSG("Buffer overrun");
+        XFREE(str, NULL, DYNAMIC_TYPE_TMP_BUFFER);
+        return NULL;
+    }
+
     XSTRNCAT(tmp, val, valSz);
     XFREE(str, NULL, DYNAMIC_TYPE_TMP_BUFFER);
 
@@ -22588,7 +22615,6 @@ static long wolf_set_options(long old_op, long op)
     return old_op | op;
 }
 
-#if defined(OPENSSL_EXTRA) || defined(WOLFSSL_WPAS_SMALL)
 long wolfSSL_set_options(WOLFSSL* ssl, long op)
 {
     word16 haveRSA = 1;
@@ -22603,29 +22629,28 @@ long wolfSSL_set_options(WOLFSSL* ssl, long op)
 
     ssl->options.mask = wolf_set_options(ssl->options.mask, op);
 
-#ifdef SSL_OP_NO_TLSv1_3
-    if ((ssl->options.mask & SSL_OP_NO_TLSv1_3) == SSL_OP_NO_TLSv1_3) {
+    if ((ssl->options.mask & WOLFSSL_OP_NO_TLSv1_3) == WOLFSSL_OP_NO_TLSv1_3) {
         if (ssl->version.minor == TLSv1_3_MINOR)
             ssl->version.minor = TLSv1_2_MINOR;
     }
-#endif
 
-    if ((ssl->options.mask & SSL_OP_NO_TLSv1_2) == SSL_OP_NO_TLSv1_2) {
+    if ((ssl->options.mask & WOLFSSL_OP_NO_TLSv1_2) == WOLFSSL_OP_NO_TLSv1_2) {
         if (ssl->version.minor == TLSv1_2_MINOR)
             ssl->version.minor = TLSv1_1_MINOR;
     }
 
-    if ((ssl->options.mask & SSL_OP_NO_TLSv1_1) == SSL_OP_NO_TLSv1_1) {
+    if ((ssl->options.mask & WOLFSSL_OP_NO_TLSv1_1) == WOLFSSL_OP_NO_TLSv1_1) {
         if (ssl->version.minor == TLSv1_1_MINOR)
             ssl->version.minor = TLSv1_MINOR;
     }
 
-    if ((ssl->options.mask & SSL_OP_NO_TLSv1) == SSL_OP_NO_TLSv1) {
+    if ((ssl->options.mask & WOLFSSL_OP_NO_TLSv1) == WOLFSSL_OP_NO_TLSv1) {
         if (ssl->version.minor == TLSv1_MINOR)
             ssl->version.minor = SSLv3_MINOR;
     }
 
-    if ((ssl->options.mask & WOLFSSL_OP_NO_COMPRESSION) == WOLFSSL_OP_NO_COMPRESSION) {
+    if ((ssl->options.mask & WOLFSSL_OP_NO_COMPRESSION)
+        == WOLFSSL_OP_NO_COMPRESSION) {
     #ifdef HAVE_LIBZ
         ssl->options.usingCompression = 0;
     #endif
@@ -22660,8 +22685,6 @@ long wolfSSL_get_options(const WOLFSSL* ssl)
         return WOLFSSL_FAILURE;
     return ssl->options.mask;
 }
-
-#endif /* OPENSSL_EXTRA || WOLFSSL_WPAS_SMALL */
 
 #if defined(HAVE_SECURE_RENEGOTIATION) \
         || defined(HAVE_SERVER_RENEGOTIATION_INFO)
@@ -36024,6 +36047,7 @@ char *wolfSSL_BN_bn2hex(const WOLFSSL_BIGNUM *bn)
 int wolfSSL_BN_print_fp(XFILE fp, const WOLFSSL_BIGNUM *bn)
 {
     char *buf;
+    int ret;
 
     WOLFSSL_ENTER("wolfSSL_BN_print_fp");
 
@@ -36038,10 +36062,14 @@ int wolfSSL_BN_print_fp(XFILE fp, const WOLFSSL_BIGNUM *bn)
         return WOLFSSL_FAILURE;
     }
 
-    XFPRINTF(fp, "%s", buf);
+    if (XFPRINTF(fp, "%s", buf) < 0)
+        ret = WOLFSSL_FAILURE;
+    else
+        ret = WOLFSSL_SUCCESS;
+
     XFREE(buf, NULL, DYNAMIC_TYPE_OPENSSL);
 
-    return WOLFSSL_SUCCESS;
+    return ret;
 }
 #endif /* !NO_FILESYSTEM */
 
@@ -36214,7 +36242,12 @@ int wolfSSL_ASN1_STRING_print_ex(WOLFSSL_BIO *out, WOLFSSL_ASN1_STRING *str,
             return WOLFSSL_FAILURE;
         }
         XMEMSET(typebuf, 0, type_len);
-        XSNPRINTF((char*)typebuf, (size_t)type_len , "%s:", tag);
+        if (XSNPRINTF((char*)typebuf, (size_t)type_len , "%s:", tag)
+            >= (int)type_len)
+        {
+            WOLFSSL_MSG("Buffer overrun.");
+            return WOLFSSL_FAILURE;
+        }
         type_len--;
     }
 
@@ -37951,7 +37984,8 @@ int wolfSSL_RAND_write_file(const char* fname)
                 bytes = 0;
             }
             else {
-                XFWRITE(buf, 1, bytes, f);
+                size_t bytes_written = XFWRITE(buf, 1, bytes, f);
+                bytes = (int)bytes_written;
                 XFCLOSE(f);
             }
         }

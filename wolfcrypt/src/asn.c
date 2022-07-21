@@ -1,6 +1,6 @@
 /* asn.c
  *
- * Copyright (C) 2006-2021 wolfSSL Inc.
+ * Copyright (C) 2006-2022 wolfSSL Inc.
  *
  * This file is part of wolfSSL.
  *
@@ -11108,16 +11108,26 @@ static int GenerateDNSEntryIPString(DNS_entry* entry, void* heap)
 
     /* store IP addresses as a string */
     if (entry->len == WOLFSSL_IP4_ADDR_LEN) {
-        XSNPRINTF(tmpName, sizeof(tmpName), "%u.%u.%u.%u", 0xFFU & ip[0],
-                0xFFU & ip[1], 0xFFU & ip[2], 0xFFU & ip[3]);
+        if (XSNPRINTF(tmpName, sizeof(tmpName), "%u.%u.%u.%u", 0xFFU & ip[0],
+                      0xFFU & ip[1], 0xFFU & ip[2], 0xFFU & ip[3])
+            >= (int)sizeof(tmpName))
+        {
+            WOLFSSL_MSG("IP buffer overrun");
+            return BUFFER_E;
+        }
     }
 
     if (entry->len == WOLFSSL_IP6_ADDR_LEN) {
         int i;
         for (i = 0; i < 8; i++) {
-            XSNPRINTF(tmpName + i * 5, sizeof(tmpName) - i * 5,
+            if (XSNPRINTF(tmpName + i * 5, sizeof(tmpName) - i * 5,
                     "%02X%02X%s", 0xFF & ip[2 * i], 0xFF & ip[2 * i + 1],
-                    (i < 7) ? ":" : "");
+                    (i < 7) ? ":" : "")
+                >= (int)sizeof(tmpName))
+            {
+                WOLFSSL_MSG("IPv6 buffer overrun");
+                return BUFFER_E;
+            }
         }
     }
 
@@ -11131,6 +11141,8 @@ static int GenerateDNSEntryIPString(DNS_entry* entry, void* heap)
         XMEMCPY(entry->ipString, tmpName, nameSz);
         entry->ipString[nameSz] = '\0';
     }
+
+    (void)heap;
 
     return ret;
 }
@@ -12424,8 +12436,13 @@ int GetTimeString(byte* date, int format, char* buf, int len)
     }
     idx = 4; /* use idx now for char buffer */
 
-    XSNPRINTF(buf + idx, len - idx, "%2d %02d:%02d:%02d %d GMT",
-              t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, (int)t.tm_year + 1900);
+    if (XSNPRINTF(buf + idx, len - idx, "%2d %02d:%02d:%02d %d GMT",
+              t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, (int)t.tm_year + 1900)
+        >= len - idx)
+    {
+        WOLFSSL_MSG("buffer overrun in GetTimeString");
+        return 0;
+    }
 
     return 1;
 }
@@ -22388,7 +22405,7 @@ enum {
  * @return  BAD_FUNC_ARG when key is NULL.
  * @return  MEMORY_E when dynamic memory allocation failed.
  */
-static int SetAsymKeyDerPublic(const byte* pubKey, word32 pubKeyLen,
+int SetAsymKeyDerPublic(const byte* pubKey, word32 pubKeyLen,
     byte* output, word32 outLen, int keyType, int withHeader)
 {
     int ret = 0;
@@ -22836,6 +22853,31 @@ static int SetExtensionsHeader(byte* out, word32 outSz, int extSz)
     idx += seqSz;
 
     return idx;
+}
+
+
+/* encode CA basic constraints true with path length
+ * return total bytes written */
+static int SetCaWithPathLen(byte* out, word32 outSz, byte pathLen)
+{
+    /* ASN1->DER sequence for Basic Constraints True and path length */
+    const byte caPathLenBasicConstASN1[] = {
+        0x30, 0x0F, 0x06, 0x03, 0x55, 0x1D, 0x13, 0x04,
+        0x08, 0x30, 0x06, 0x01, 0x01, 0xFF, 0x02, 0x01,
+        0x00
+    };
+
+    if (out == NULL)
+        return BAD_FUNC_ARG;
+
+    if (outSz < sizeof(caPathLenBasicConstASN1))
+        return BUFFER_E;
+
+    XMEMCPY(out, caPathLenBasicConstASN1, sizeof(caPathLenBasicConstASN1));
+
+    out[sizeof(caPathLenBasicConstASN1)-1] = pathLen;
+
+    return (int)sizeof(caPathLenBasicConstASN1);
 }
 
 
@@ -24409,8 +24451,17 @@ static int EncodeExtensions(Cert* cert, byte* output, word32 maxSz,
             /* Set Basic Constraints to be a Certificate Authority. */
             SetASN_Boolean(&dataASN[CERTEXTSASN_IDX_BC_CA], 1);
             SetASN_Buffer(&dataASN[CERTEXTSASN_IDX_BC_OID], bcOID, sizeof(bcOID));
-            /* TODO: consider adding path length field in Cert. */
-            dataASN[CERTEXTSASN_IDX_BC_PATHLEN].noOut = 1;
+            if (cert->pathLen
+            #ifdef WOLFSSL_CERT_EXT
+                && ((cert->keyUsage & KEYUSE_KEY_CERT_SIGN) || (!cert->keyUsage))
+            #endif
+            ) {
+                SetASN_Int8Bit(&dataASN[CERTEXTSASN_IDX_BC_PATHLEN],
+                        cert->pathLen);
+            }
+            else {
+                dataASN[CERTEXTSASN_IDX_BC_PATHLEN].noOut = 1;
+            }
         }
         else if (cert->basicConstSet) {
             /* Set Basic Constraints to be a non Certificate Authority. */
@@ -25001,8 +25052,24 @@ static int EncodeCert(Cert* cert, DerCert* der, RsaKey* rsaKey, ecc_key* eccKey,
     /* set the extensions */
     der->extensionsSz = 0;
 
+    /* RFC 5280 : 4.2.1.9. Basic Constraints
+     * The pathLenConstraint field is meaningful only if the CA boolean is
+     * asserted and the key usage extension, if present, asserts the
+     * keyCertSign bit */
+    /* Set CA and path length */
+    if ((cert->isCA) && (cert->pathLen)
+#ifdef WOLFSSL_CERT_EXT
+        && ((cert->keyUsage & KEYUSE_KEY_CERT_SIGN) || (!cert->keyUsage))
+#endif
+        ) {
+        der->caSz = SetCaWithPathLen(der->ca, sizeof(der->ca), cert->pathLen);
+        if (der->caSz <= 0)
+            return CA_TRUE_E;
+
+        der->extensionsSz += der->caSz;
+    }
     /* Set CA */
-    if (cert->isCA) {
+    else if (cert->isCA) {
         der->caSz = SetCa(der->ca, sizeof(der->ca));
         if (der->caSz <= 0)
             return CA_TRUE_E;
@@ -26172,8 +26239,24 @@ static int EncodeCertReq(Cert* cert, DerCert* der, RsaKey* rsaKey,
     /* set the extensions */
     der->extensionsSz = 0;
 
+    /* RFC 5280 : 4.2.1.9. Basic Constraints
+     * The pathLenConstraint field is meaningful only if the CA boolean is
+     * asserted and the key usage extension, if present, asserts the
+     * keyCertSign bit */
+    /* Set CA and path length */
+    if ((cert->isCA) && (cert->pathLen)
+#ifdef WOLFSSL_CERT_EXT
+        && ((cert->keyUsage & KEYUSE_KEY_CERT_SIGN) || (!cert->keyUsage))
+#endif
+        ) {
+        der->caSz = SetCaWithPathLen(der->ca, sizeof(der->ca), cert->pathLen);
+        if (der->caSz <= 0)
+            return CA_TRUE_E;
+
+        der->extensionsSz += der->caSz;
+    }
     /* Set CA */
-    if (cert->isCA) {
+    else if (cert->isCA) {
         der->caSz = SetCa(der->ca, sizeof(der->ca));
         if (der->caSz <= 0)
             return CA_TRUE_E;
@@ -29646,9 +29729,7 @@ static const ASNItem edKeyASN[] = {
                                          /* attributes */
 /* ATTRS          */        { 1, ASN_CONTEXT_SPECIFIC | ASN_ASYMKEY_ATTRS, 1, 1, 1 },
                                          /* publicKey */
-/* PUBKEY         */        { 1, ASN_CONTEXT_SPECIFIC | ASN_ASYMKEY_PUBKEY, 1, 1, 1 },
-                                             /* Public value */
-/* PUBKEY_VAL     */            { 2, ASN_OCTET_STRING, 0, 0, 0 }
+/* PUBKEY         */        { 1, ASN_CONTEXT_SPECIFIC | ASN_ASYMKEY_PUBKEY, 0, 0, 1 },
 };
 enum {
     EDKEYASN_IDX_SEQ = 0,
@@ -29659,7 +29740,6 @@ enum {
     EDKEYASN_IDX_PKEY_CURVEPKEY,
     EDKEYASN_IDX_ATTRS,
     EDKEYASN_IDX_PUBKEY,
-    EDKEYASN_IDX_PUBKEY_VAL,
 };
 
 /* Number of items in ASN.1 template for Ed25519 and Ed448 private key. */
@@ -29740,11 +29820,8 @@ static int DecodeAsymKey(const byte* input, word32* inOutIdx, word32 inSz,
             return BAD_FUNC_ARG;
         }
 
-        if (GetASNHeader(input, ASN_CONTEXT_SPECIFIC | ASN_CONSTRUCTED | 1,
-                         inOutIdx, &length, inSz) < 0) {
-            return ASN_PARSE_E;
-        }
-        if (GetOctetString(input, inOutIdx, &pubSz, inSz) < 0) {
+        if (GetASNHeader(input, ASN_CONTEXT_SPECIFIC | ASN_ASYMKEY_PUBKEY | 1,
+                         inOutIdx, &pubSz, inSz) < 0) {
             return ASN_PARSE_E;
         }
 
@@ -29796,7 +29873,7 @@ static int DecodeAsymKey(const byte* input, word32* inOutIdx, word32 inSz,
     }
     else if ((ret == 0) &&
              (pubKeyLen != NULL) &&
-             (dataASN[EDKEYASN_IDX_PUBKEY_VAL].data.ref.length > *pubKeyLen)) {
+             (dataASN[EDKEYASN_IDX_PUBKEY].data.ref.length > *pubKeyLen)) {
         ret = ASN_PARSE_E;
     }
     else if (ret == 0) {
@@ -29805,9 +29882,9 @@ static int DecodeAsymKey(const byte* input, word32* inOutIdx, word32 inSz,
         XMEMCPY(privKey, dataASN[EDKEYASN_IDX_PKEY_CURVEPKEY].data.ref.data,
                 *privKeyLen);
         if (pubKeyLen != NULL)
-            *pubKeyLen = dataASN[EDKEYASN_IDX_PUBKEY_VAL].data.ref.length;
+            *pubKeyLen = dataASN[EDKEYASN_IDX_PUBKEY].data.ref.length;
         if (pubKey != NULL && pubKeyLen != NULL)
-            XMEMCPY(pubKey, dataASN[EDKEYASN_IDX_PUBKEY_VAL].data.ref.data,
+            XMEMCPY(pubKey, dataASN[EDKEYASN_IDX_PUBKEY].data.ref.data,
                     *pubKeyLen);
     }
 
@@ -29816,7 +29893,7 @@ static int DecodeAsymKey(const byte* input, word32* inOutIdx, word32 inSz,
 #endif /* WOLFSSL_ASN_TEMPLATE */
 }
 
-static int DecodeAsymKeyPublic(const byte* input, word32* inOutIdx, word32 inSz,
+int DecodeAsymKeyPublic(const byte* input, word32* inOutIdx, word32 inSz,
     byte* pubKey, word32* pubKeyLen, int keyType)
 {
     int ret = 0;
@@ -30008,7 +30085,6 @@ int wc_Curve25519PublicKeyDecode(const byte* input, word32* inOutIdx,
  * @return  Size of encoded data in bytes on success
  * @return  BAD_FUNC_ARG when key is NULL.
  * @return  MEMORY_E when dynamic memory allocation failed.
- * @return  LENGTH_ONLY_E return length only.
  */
 static int SetAsymKeyDer(const byte* privKey, word32 privKeyLen,
     const byte* pubKey, word32 pubKeyLen,
@@ -30030,7 +30106,7 @@ static int SetAsymKeyDer(const byte* privKey, word32 privKeyLen,
 #ifndef WOLFSSL_ASN_TEMPLATE
     /* calculate size */
     if (pubKey) {
-        pubSz = 2 + 2 + pubKeyLen;
+        pubSz = 2 + pubKeyLen;
     }
     privSz = 2 + 2 + privKeyLen;
     algoSz = SetAlgoID(keyType, NULL, oidKeyType, 0);
@@ -30046,7 +30122,7 @@ static int SetAsymKeyDer(const byte* privKey, word32 privKeyLen,
     if (ret == 0 && output != NULL) {
         /* write out */
         /* seq */
-        seqSz  = SetSequence(verSz + algoSz + privSz + pubSz, output);
+        seqSz = SetSequence(verSz + algoSz + privSz + pubSz, output);
         idx = seqSz;
         /* ver */
         SetMyVersion(0, output + idx, FALSE);
@@ -30061,13 +30137,16 @@ static int SetAsymKeyDer(const byte* privKey, word32 privKeyLen,
         idx += privKeyLen;
         /* pubKey */
         if (pubKey) {
-            idx += SetExplicit(1, 2 + pubKeyLen, output + idx);
-            idx += SetOctetString(pubKeyLen, output + idx);
+            idx += SetHeader(ASN_CONTEXT_SPECIFIC | ASN_ASYMKEY_PUBKEY |
+                             1, pubKeyLen, output + idx);
             XMEMCPY(output + idx, pubKey, pubKeyLen);
             idx += pubKeyLen;
         }
-
-        ret = idx;
+        sz = idx;
+    }
+    if (ret == 0) {
+        /* Return size of encoding. */
+        ret = sz;
     }
 #else
 
@@ -30084,7 +30163,7 @@ static int SetAsymKeyDer(const byte* privKey, word32 privKeyLen,
         dataASN[EDKEYASN_IDX_ATTRS].noOut = 1;
         if (pubKey) {
             /* Leave space for public key. */
-            SetASN_Buffer(&dataASN[EDKEYASN_IDX_PUBKEY_VAL], NULL, pubKeyLen);
+            SetASN_Buffer(&dataASN[EDKEYASN_IDX_PUBKEY], NULL, pubKeyLen);
         }
         else {
             /* Don't put out public part. */
@@ -30110,10 +30189,11 @@ static int SetAsymKeyDer(const byte* privKey, word32 privKeyLen,
 
         if (pubKey != NULL) {
             /* Put public value into space provided. */
-            XMEMCPY((byte*)dataASN[EDKEYASN_IDX_PUBKEY_VAL].data.buffer.data,
+            XMEMCPY((byte*)dataASN[EDKEYASN_IDX_PUBKEY].data.buffer.data,
                     pubKey, pubKeyLen);
         }
-
+    }
+    if (ret == 0) {
         /* Return size of encoding. */
         ret = sz;
     }
@@ -30175,7 +30255,7 @@ int wc_Curve25519PublicKeyToDer(curve25519_key* key, byte* output, word32 inLen,
                              int withAlg)
 {
     int    ret;
-    byte   pubKey[CURVE25519_KEYSIZE];
+    byte   pubKey[CURVE25519_PUB_KEY_SIZE];
     word32 pubKeyLen = (word32)sizeof(pubKey);
 
     if (key == NULL || output == NULL) {
