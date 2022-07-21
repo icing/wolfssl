@@ -3918,6 +3918,9 @@ typedef struct Options {
     word16            dtls13SendMoreAcks:1;  /* Send more acks during the
                                               * handshake process */
 #endif
+#ifdef WOLFSSL_TLS13
+    word16            tls13MiddleBoxCompat:1; /* TLSv1.3 middlebox compatibility */
+#endif
 
     /* need full byte values for this section */
     byte            processReply;           /* nonblocking resume */

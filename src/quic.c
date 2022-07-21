@@ -333,11 +333,6 @@ int wolfSSL_set_quic_method(WOLFSSL *ssl, const WOLFSSL_QUIC_METHOD *quic_method
         return WOLFSSL_FAILURE;
     }
     ssl->quic.method = quic_method;
-#if defined(WOLFSSL_TLS13_MIDDLEBOX_COMPAT)
-    /* TLSv1.3 middlebox compatibility needs to be disabled for QUIC */
-    /* FIXME: we need a better way to disable this */
-    ssl->options.sentChangeCipher  = 1;
-#endif
     return WOLFSSL_SUCCESS;
 }
 
