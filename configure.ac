@@ -664,7 +664,6 @@ then
         test "$enable_tls13" = "" && enable_tls13=yes
         test "$enable_rsapss" = "" && enable_rsapss=yes
     fi
-    # FIXME: is there dependency to any FIPS settings?
     test "$enable_quic" = "" && enable_quic=yes
 
     # this set is also enabled by enable-all-crypto:
@@ -4772,7 +4771,7 @@ AC_ARG_ENABLE([session-ticket],
     [ ENABLED_SESSION_TICKET=no ]
     )
 
-if test "x$ENABLED_NGINX" = "xyes" || test "$ENABLED_WPAS" = "yes" || test "x$ENABLED_HAPROXY" = "xyes" || test "x$ENABLED_LIGHTY" = "xyes" || test "x$ENABLED_QUIC" = "xyes"
+if test "x$ENABLED_NGINX" = "xyes" || test "$ENABLED_WPAS" = "yes" || test "x$ENABLED_HAPROXY" = "xyes" || test "x$ENABLED_LIGHTY" = "xyes"
 then
     ENABLED_SESSION_TICKET=yes
 fi

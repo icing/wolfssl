@@ -897,11 +897,10 @@ static void QuicConversation_init(QuicConversation *conv,
     conv->verbose = tclient->verbose && tserver->verbose;
 }
 
-#ifdef WOLFSSL_EARLY_DATA
 static int QuicConversation_start(QuicConversation *conv, const byte *data,
                                   size_t data_len, size_t *pwritten)
 {
-    int ret, written;
+    int ret;
 
     AssertFalse(conv->started);
 
@@ -909,6 +908,8 @@ static int QuicConversation_start(QuicConversation *conv, const byte *data,
         printf("[%s <-> %s] starting\n", conv->client->name, conv->server->name);
     }
     if (data && data_len > 0) {
+#ifdef WOLFSSL_EARLY_DATA
+        int written;
         ret = wolfSSL_write_early_data(conv->client->ssl, data, (int)data_len, &written);
         if (ret < 0) {
             int err = wolfSSL_get_error(conv->client->ssl, ret);
@@ -918,6 +919,10 @@ static int QuicConversation_start(QuicConversation *conv, const byte *data,
         }
         *pwritten = (size_t)written;
         conv->sent_early_data = 1;
+#else
+        fprintf(stderr, "Cannot send EARLY DATA without feature enabled!\n");
+        AssertTrue(0);
+#endif
     }
     else {
         ret = wolfSSL_connect(conv->client->ssl);
@@ -929,7 +934,6 @@ static int QuicConversation_start(QuicConversation *conv, const byte *data,
     conv->started = 1;
     return ret;
 }
-#endif
 
 static int QuicConversation_step(QuicConversation *conv)
 {
@@ -950,6 +954,7 @@ static int QuicConversation_step(QuicConversation *conv)
     }
     else if (conv->client->output.len > 0) {
         QuicTestContext_forward(conv->client, conv->server, conv->rec_log);
+#ifdef WOLFSSL_EARLY_DATA
         if (conv->accept_early_data) {
             int written;
             n = wolfSSL_read_early_data(conv->server->ssl,
@@ -965,7 +970,9 @@ static int QuicConversation_step(QuicConversation *conv)
                     printf("RECVed early data, len now=%lu\n", conv->early_data_len);
             }
         }
-        else {
+        else
+ #endif /* WOLFSSL_EARLY_DATA */
+        {
             n = wolfSSL_quic_read_write(conv->server->ssl);
             if (n != WOLFSSL_SUCCESS) {
                 AssertIntEQ(wolfSSL_get_error(conv->server->ssl, 0), SSL_ERROR_WANT_READ);
@@ -1020,7 +1027,9 @@ static int test_quic_client_hello(int verbose) {
 
     /* Set transport params, expect both extensions */
     QuicTestContext_init(&tctx, ctx, "client", verbose);
+#ifdef HAVE_SNI
     wolfSSL_set_tlsext_host_name(tctx.ssl, "wolfssl.com");
+#endif
     AssertTrue(wolfSSL_connect(tctx.ssl) != 0);
     AssertIntEQ(wolfSSL_get_error(tctx.ssl, 0), SSL_ERROR_WANT_READ);
     check_quic_client_hello_tp(&tctx.output, 1, 1);
@@ -1087,7 +1096,11 @@ static int test_quic_server_hello(int verbose) {
     AssertIntEQ(tclient.output.len, 0);
     AssertIntEQ(tserver.output.len, 0);
     /* what have we seen? */
+#ifdef HAVE_SESSION_TICKET
     AssertStrEQ(conv.rec_log, "ClientHello:ServerHello:EncryptedExtension:Certificate:CertificateVerify:Finished:Finished:SessionTicket");
+#else
+    AssertStrEQ(conv.rec_log, "ClientHello:ServerHello:EncryptedExtension:Certificate:CertificateVerify:Finished:Finished");
+#endif
     /* we are at application encryption level */
     AssertIntEQ(wolfSSL_quic_read_level(tclient.ssl), wolfssl_encryption_application);
     AssertIntEQ(wolfSSL_quic_write_level(tclient.ssl), wolfssl_encryption_application);
@@ -1418,7 +1431,7 @@ int QuicTest(void)
     if ((ret = test_quic_session_export(verbose)) != 0) goto leave;
 #endif /* HAVE_SESSION_TICKET */
     (void)check_static;
-    
+
 leave:
     if (ret != 0)
         printf("  FAILED: some tests did not pass.\n");
