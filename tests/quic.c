@@ -882,6 +882,7 @@ typedef struct {
     int started;
     int verbose;
     char rec_log[16*1024];
+    int sent_early_data;
     int accept_early_data;
     char early_data[16*1024];
     size_t early_data_len;
@@ -916,6 +917,7 @@ static int QuicConversation_start(QuicConversation *conv, const byte *data,
             AssertTrue(0);
         }
         *pwritten = (size_t)written;
+        conv->sent_early_data = 1;
     }
     else {
         ret = wolfSSL_connect(conv->client->ssl);
@@ -982,12 +984,20 @@ static void QuicConversation_do(QuicConversation *conv)
 
     while (1) {
         if (!QuicConversation_step(conv)) {
-            if (wolfSSL_get_error(conv->client->ssl, 0) == 0
-                && wolfSSL_get_error(conv->server->ssl, 0) == 0) {
+            int c_err = wolfSSL_get_error(conv->client->ssl, 0);
+            int s_err = wolfSSL_get_error(conv->server->ssl, 0);
+            if (c_err == 0
+                && (s_err == 0
+                    || (conv->sent_early_data && s_err == SSL_ERROR_WANT_READ))) {
+                /* Since QUIC does not use EndOfEarlyData messages, we may
+                 * encounter WANT_READ on the server side. QUIC protocol stacks
+                 * detect EOF here differently, so this should be fine. */
                 break;  /* handshake done */
             }
-            AssertNull("Neither tclient nor server have anything to send, "
-                "but handshake has not concluded");
+            printf("Neither tclient nor server have anything to send, "
+                   "but client_error=%d, server_error=%d\n",
+                   c_err, s_err);
+            AssertFalse(1);
         }
     }
 }
@@ -1448,7 +1458,7 @@ int QuicTest(void)
 #ifdef HAVE_SESSION_TICKET
     if ((ret = test_quic_resumption(verbose)) != 0) goto leave;
 #ifdef WOLFSSL_EARLY_DATA
-    if ((ret = test_quic_early_data(verbose)) != 0) goto leave;
+    if ((ret = test_quic_early_data(1 || verbose)) != 0) goto leave;
 #endif /* WOLFSSL_EARLY_DATA */
     if ((ret = test_quic_session_export(verbose)) != 0) goto leave;
 #endif /* HAVE_SESSION_TICKET */
