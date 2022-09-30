@@ -23227,6 +23227,8 @@ const char* wolfSSL_ERR_reason_error_string(unsigned long e)
 #ifdef WOLFSSL_QUIC
     case QUIC_TP_MISSING_E:
         return "QUIC transport parameter not set";
+    case QUIC_WRONG_ENC_LEVEL:
+        return "QUIC data received at wrong encryption level";
 #endif
     case DTLS_CID_ERROR:
         return "DTLS ConnectionID mismatch or missing";
