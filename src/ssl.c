@@ -22987,6 +22987,7 @@ int wolfSSL_ERR_GET_LIB(unsigned long err)
     switch (value) {
     case -SSL_R_HTTP_REQUEST:
         return ERR_LIB_SSL;
+    case -ASN_NO_PEM_HEADER:
     case PEM_R_NO_START_LINE:
     case PEM_R_PROBLEMS_GETTING_PASSWORD:
     case PEM_R_BAD_PASSWORD_READ:
@@ -31033,7 +31034,7 @@ unsigned long wolfSSL_ERR_peek_last_error_line(const char **file, int *line)
             WOLFSSL_MSG("Issue peeking at error node in queue");
             return 0;
         }
-    #if defined(OPENSSL_ALL) || defined(WOLFSSL_NGINX)
+    #if defined(OPENSSL_ALL) || defined(WOLFSSL_NGINX) || defined(WOLFSSL_HAPROXY)
         if (ret == -ASN_NO_PEM_HEADER)
             return (ERR_LIB_PEM << 24) | PEM_R_NO_START_LINE;
     #endif

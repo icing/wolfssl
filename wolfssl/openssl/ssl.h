@@ -1638,6 +1638,16 @@ typedef WOLFSSL_CONF_CTX SSL_CONF_CTX;
 #define X25519_PRIVATE_KEY_LEN          32
 #define X25519_PUBLIC_VALUE_LEN         32
 
+/* TLSv1.3 cipher ids as defined in RFC 8446, returned by
+ * SSL_CIPHER_get_id(cipher)
+ * used by QUIC implementations, such as HAProxy
+ */
+#define TLS1_3_CK_AES_128_GCM_SHA256       0x1301
+#define TLS1_3_CK_AES_256_GCM_SHA384       0x1302
+#define TLS1_3_CK_CHACHA20_POLY1305_SHA256 0x1303
+#define TLS1_3_CK_AES_128_CCM_SHA256       0x1304
+#define TLS1_3_CK_AES_128_CCM_8_SHA256     0x1305
+
 #define SSL_R_MISSING_QUIC_TRANSPORT_PARAMETERS_EXTENSION   QUIC_TP_MISSING_E
 #define SSL_R_WRONG_ENCRYPTION_LEVEL_RECEIVED               QUIC_WRONG_ENC_LEVEL
 
@@ -1646,6 +1656,10 @@ typedef WOLFSSL_QUIC_METHOD             SSL_QUIC_METHOD;
 
 #define ssl_encryption_level_t          wolfssl_encryption_level_t
 typedef WOLFSSL_ENCRYPTION_LEVEL        OSSL_ENCRYPTION_LEVEL;
+#define ssl_encryption_initial          wolfssl_encryption_initial
+#define ssl_encryption_early_data       wolfssl_encryption_early_data
+#define ssl_encryption_handshake        wolfssl_encryption_handshake
+#define ssl_encryption_application      wolfssl_encryption_application
 
 #define SSL_CTX_set_quic_method         wolfSSL_CTX_set_quic_method
 #define SSL_set_quic_method             wolfSSL_set_quic_method

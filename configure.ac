@@ -5439,6 +5439,12 @@ then
         AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_CERT_GEN"
     fi
 
+    if test "x$ENABLED_KEYGEN" = "xno"
+    then
+        ENABLED_KEYGEN="yes"
+        AM_CFLAGS="$AM_CFLAGS -DWOLFSSL_KEY_GEN"
+    fi
+
     if test "x$ENABLED_CERTREQ" = "xno"
     then
         ENABLED_CERTREQ="yes"
