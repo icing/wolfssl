@@ -700,9 +700,14 @@ wolfSSL_X509_STORE_set_verify_cb((WOLFSSL_X509_STORE *)(s), (WOLFSSL_X509_STORE_
 
 #define X509_CRL_free                   wolfSSL_X509_CRL_free
 #define X509_CRL_get_lastUpdate         wolfSSL_X509_CRL_get_lastUpdate
+#define X509_CRL_get0_lastUpdate        wolfSSL_X509_CRL_get_lastUpdate
 #define X509_CRL_get_nextUpdate         wolfSSL_X509_CRL_get_nextUpdate
+#define X509_CRL_get0_nextUpdate        wolfSSL_X509_CRL_get_nextUpdate
 #define X509_CRL_verify                 wolfSSL_X509_CRL_verify
 #define X509_CRL_get_REVOKED            wolfSSL_X509_CRL_get_REVOKED
+#define X509_CRL_get_issuer             wolfSSL_X509_CRL_get_issuer_name
+#define X509_CRL_get_signature_nid      wolfSSL_X509_CRL_get_signature_nid
+#define X509_CRL_get_version            wolfSSL_X509_CRL_version
 #define X509_load_crl_file              wolfSSL_X509_load_crl_file
 
 #define X509_get_X509_PUBKEY            wolfSSL_X509_get_X509_PUBKEY
@@ -726,6 +731,10 @@ wolfSSL_X509_STORE_set_verify_cb((WOLFSSL_X509_STORE *)(s), (WOLFSSL_X509_STORE_
 
 #define X509_OBJECT_get0_X509           wolfSSL_X509_OBJECT_get0_X509
 #define X509_OBJECT_get0_X509_CRL       wolfSSL_X509_OBJECT_get0_X509_CRL
+
+#define X509_REVOKED_get_serial_number   wolfSSL_X509_REVOKED_get_serial_number
+#define X509_REVOKED_get0_serialNumber   wolfSSL_X509_REVOKED_get0_serial_number
+#define X509_REVOKED_get0_revocationDate wolfSSL_X509_REVOKED_get0_revocation_date
 
 #define X509_check_purpose(...)         0
 
@@ -829,6 +838,7 @@ wolfSSL_X509_STORE_set_verify_cb((WOLFSSL_X509_STORE *)(s), (WOLFSSL_X509_STORE_
 #define a2i_ASN1_INTEGER                wolfSSL_a2i_ASN1_INTEGER
 #define i2a_ASN1_INTEGER                wolfSSL_i2a_ASN1_INTEGER
 #define i2c_ASN1_INTEGER                wolfSSL_i2c_ASN1_INTEGER
+#define i2a_ASN1_STRING                 wolfSSL_i2a_ASN1_STRING
 #define ASN1_INTEGER_new                wolfSSL_ASN1_INTEGER_new
 #define ASN1_INTEGER_free               wolfSSL_ASN1_INTEGER_free
 #define ASN1_INTEGER_cmp                wolfSSL_ASN1_INTEGER_cmp
@@ -1381,6 +1391,8 @@ typedef WOLFSSL_SRTP_PROTECTION_PROFILE      SRTP_PROTECTION_PROFILE;
 #endif
 #define SSL_AD_INSUFFICIENT_SECURITY    insufficient_security
 #define SSL_AD_USER_CANCELLED           user_canceled
+#define SSL_AD_NO_APPLICATION_PROTOCOL  no_application_protocol
+#define SSL_AD_MISSING_EXTENSION        missing_extension
 
 #define SSL3_AL_FATAL                   2
 #define SSL_TLSEXT_ERR_OK               0

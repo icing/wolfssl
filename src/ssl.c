@@ -33894,6 +33894,52 @@ int wolfSSL_i2a_ASN1_INTEGER(BIO *bp, const WOLFSSL_ASN1_INTEGER *a)
 
     return wolfSSL_BIO_write(bp, buf, bufLen - 1); /* Don't write out NULL char */
 }
+
+WOLFSSL_API int wolfSSL_i2a_ASN1_STRING(WOLFSSL_BIO *bp,
+    const WOLFSSL_ASN1_STRING *a, int type)
+{
+    int out_len = 0;
+    static const char *hex = "0123456789ABCDEF";
+
+    (void)type;
+    WOLFSSL_ENTER("wolfSSL_i2a_ASN1_STRING");
+    if (a->length == 0) {
+        out_len = wolfSSL_BIO_write(bp, "0", 1);
+        if (1 != out_len) {
+            out_len = -1; goto cleanup;
+        }
+    }
+    else {
+        char buf[72];
+        const byte *b;
+        int i, buf_offset = 0;
+
+        for (i = 0, b = (const byte*)a->data; i < a->length; ++i, ++b) {
+            if (buf_offset > 70) {
+                buf[buf_offset++] = '\\';
+                buf[buf_offset++] = '\n';
+                if (buf_offset != wolfSSL_BIO_write(bp, buf, buf_offset)) {
+                    out_len = -1; goto cleanup;
+                }
+                out_len += buf_offset;
+                buf_offset = 0;
+            }
+            buf[buf_offset++] = hex[(*b >> 4) & 0x0f];
+            buf[buf_offset++] = hex[*b & 0x0f];
+        }
+        if (buf_offset > 0) {
+            if (buf_offset != wolfSSL_BIO_write(bp, buf, buf_offset)) {
+                out_len = -1; goto cleanup;
+            }
+            out_len += buf_offset;
+            buf_offset = 0;
+        }
+    }
+
+cleanup:
+    return out_len;
+}
+
 #endif /* !NO_BIO */
 
 

@@ -112,6 +112,10 @@ WOLFSSL_API int wolfSSL_i2d_OCSP_REQUEST_bio(WOLFSSL_BIO* out,
 
 WOLFSSL_API int wolfSSL_i2d_OCSP_CERTID(WOLFSSL_OCSP_CERTID* id,
                                         unsigned char** data);
+WOLFSSL_API
+WOLFSSL_OCSP_CERTID* wolfSSL_d2i_OCSP_CERTID(WOLFSSL_OCSP_CERTID** cidOut,
+                                             const unsigned char** derIn,
+                                             int length);
 WOLFSSL_API const WOLFSSL_OCSP_CERTID* wolfSSL_OCSP_SINGLERESP_get0_id(
     const WOLFSSL_OCSP_SINGLERESP *single);
 WOLFSSL_API int wolfSSL_OCSP_id_cmp(WOLFSSL_OCSP_CERTID *a, WOLFSSL_OCSP_CERTID *b);
@@ -124,7 +128,11 @@ WOLFSSL_API int wolfSSL_OCSP_resp_count(WOLFSSL_OCSP_BASICRESP *bs);
 WOLFSSL_API WOLFSSL_OCSP_SINGLERESP* wolfSSL_OCSP_resp_get0(
     WOLFSSL_OCSP_BASICRESP *bs, int idx);
 
-#endif
+WOLFSSL_API int wolfSSL_OCSP_RESPONSE_print(WOLFSSL_BIO *bp, OcspResponse *o,
+                                            unsigned long flags);
+
+#endif /* defined(OPENSSL_ALL) || defined(OPENSSL_EXTRA) || defined(WOLFSSL_NGINX) ||
+    defined(WOLFSSL_HAPROXY) || defined(HAVE_LIGHTY) */
 #ifdef OPENSSL_EXTRA
 WOLFSSL_API int wolfSSL_OCSP_REQUEST_add_ext(OcspRequest* req,
         WOLFSSL_X509_EXTENSION* ext, int idx);

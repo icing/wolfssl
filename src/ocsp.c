@@ -1068,6 +1068,31 @@ int wolfSSL_i2d_OCSP_CERTID(WOLFSSL_OCSP_CERTID* id, unsigned char** data)
     return id->rawCertIdSize;
 }
 
+WOLFSSL_OCSP_CERTID* wolfSSL_d2i_OCSP_CERTID(WOLFSSL_OCSP_CERTID** cidOut,
+                                             const unsigned char** derIn,
+                                             int length)
+{
+    if ((cidOut == NULL) || (derIn == NULL) || (length == 0))
+        return (NULL);
+
+    /* If a NULL is passed we allocate the memory for the caller. */
+    if (*cidOut == NULL) {
+        *cidOut = (WOLFSSL_OCSP_CERTID*)XMALLOC(length, NULL, DYNAMIC_TYPE_OPENSSL);
+
+        if (*cidOut == NULL) {
+            return (NULL);
+        }
+    }
+
+    XMEMCPY ((*cidOut)->rawCertId, *derIn, length);
+    (*cidOut)->rawCertIdSize = length;
+
+    /* Per spec. advance past the data that is being returned to the caller. */
+    *derIn = *derIn + length;
+
+    return (*cidOut);
+}
+
 const WOLFSSL_OCSP_CERTID* wolfSSL_OCSP_SINGLERESP_get0_id(const WOLFSSL_OCSP_SINGLERESP *single)
 {
     return single;
@@ -1163,6 +1188,16 @@ WOLFSSL_OCSP_SINGLERESP* wolfSSL_OCSP_resp_get0(WOLFSSL_OCSP_BASICRESP *bs, int 
     }
 
     return single;
+}
+
+int wolfSSL_OCSP_RESPONSE_print(WOLFSSL_BIO *bp, OcspResponse *o,
+                                unsigned long flags)
+{
+    /* FIXME */
+    (void)bp;
+    (void)o;
+    (void)flags;
+    return WOLFSSL_FATAL_ERROR;
 }
 
 #endif /* OPENSSL_ALL || APACHE_HTTPD || WOLFSSL_HAPROXY */

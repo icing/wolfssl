@@ -43,6 +43,8 @@
 #define TLS_MAX_VERSION                 TLS1_3_VERSION
 #endif
 
+#define TLSEXT_MAXLEN_host_name         255
+
 #ifdef WOLFSSL_QUIC
 /* from rfc9001 */
 #define TLSEXT_TYPE_quic_transport_parameters_draft   0xffa5
