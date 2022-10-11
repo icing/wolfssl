@@ -762,9 +762,9 @@ WOLFSSL_API int wolfSSL_EVP_PKEY_CTX_set_hkdf_md(WOLFSSL_EVP_PKEY_CTX* ctx,
 WOLFSSL_API int wolfSSL_EVP_PKEY_CTX_set1_hkdf_salt(WOLFSSL_EVP_PKEY_CTX* ctx,
                                                     byte* salt, int saltSz);
 WOLFSSL_API int wolfSSL_EVP_PKEY_CTX_set1_hkdf_key(WOLFSSL_EVP_PKEY_CTX* ctx,
-                                                   byte* key, int keySz);
+                                                   const byte* key, int keySz);
 WOLFSSL_API int wolfSSL_EVP_PKEY_CTX_add1_hkdf_info(WOLFSSL_EVP_PKEY_CTX* ctx,
-                                                    byte* info, int infoSz);
+                                                    const byte* info, int infoSz);
 WOLFSSL_API int wolfSSL_EVP_PKEY_CTX_hkdf_mode(WOLFSSL_EVP_PKEY_CTX* ctx,
                                                int mode);
 #endif
