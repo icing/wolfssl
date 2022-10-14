@@ -1938,7 +1938,7 @@ int wolfSSL_EVP_PKEY_CTX_set1_hkdf_salt(WOLFSSL_EVP_PKEY_CTX* ctx,
     return ret;
 }
 
-int wolfSSL_EVP_PKEY_CTX_set1_hkdf_key(WOLFSSL_EVP_PKEsY_CTX* ctx,
+int wolfSSL_EVP_PKEY_CTX_set1_hkdf_key(WOLFSSL_EVP_PKEY_CTX* ctx,
                                        const byte* key, int keySz)
 {
     int ret = WOLFSSL_SUCCESS;
