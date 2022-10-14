@@ -611,7 +611,7 @@ int wolfSSL_quic_do_handshake(WOLFSSL* ssl)
         }
 #endif /* WOLFSSL_EARLY_DATA */
 
-        ret = wolfSSL_SSL_do_handshake(ssl);
+        ret = wolfSSL_SSL_do_handshake_internal(ssl);
         if (ret <= 0)
             goto cleanup;
     }

@@ -33698,10 +33698,8 @@ BIO *wolfSSL_SSL_get_wbio(const WOLFSSL *s)
 }
 #endif /* !NO_BIO */
 
-int wolfSSL_SSL_do_handshake(WOLFSSL *s)
+int wolfSSL_SSL_do_handshake_internal(WOLFSSL *s)
 {
-    WOLFSSL_ENTER("wolfSSL_SSL_do_handshake");
-
     if (s == NULL)
         return WOLFSSL_FAILURE;
 
@@ -33720,6 +33718,15 @@ int wolfSSL_SSL_do_handshake(WOLFSSL *s)
     WOLFSSL_MSG("Server not compiled in");
     return WOLFSSL_FAILURE;
 #endif
+}
+
+int wolfSSL_SSL_do_handshake(WOLFSSL *s)
+{
+    WOLFSSL_ENTER("wolfSSL_SSL_do_handshake");
+    if (WOLFSSL_IS_QUIC(s)) {
+        return wolfSSL_quic_do_handshake(s);
+    }
+    return wolfSSL_SSL_do_handshake_internal(s);
 }
 
 #if defined(OPENSSL_VERSION_NUMBER) && OPENSSL_VERSION_NUMBER >= 0x10100000L
