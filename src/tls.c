@@ -10879,7 +10879,10 @@ int TLSX_EarlyData_Use(WOLFSSL* ssl, word32 maxSz, int is_response)
     }
 
     extension->resp = is_response;
-    extension->val  = maxSz;
+    /* In QUIC, earlydata size is either 0 or 0xffffffff.
+     * Override any size between, possibly left from our intial value */
+    extension->val  = (WOLFSSL_IS_QUIC(ssl) && is_response
+                       && maxSz > 0)? UINT32_MAX : maxSz;
 
     return 0;
 }
