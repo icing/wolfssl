@@ -84,6 +84,7 @@
 #define OCSP_single_get0_status   wolfSSL_OCSP_single_get0_status
 #define OCSP_resp_count           wolfSSL_OCSP_resp_count
 #define OCSP_resp_get0            wolfSSL_OCSP_resp_get0
+#define OCSP_RESPONSE_print       wolfSSL_OCSP_RESPONSE_print
 
 #endif /* HAVE_OCSP */
 

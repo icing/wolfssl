@@ -4898,8 +4898,12 @@ WOLFSSL_API int wolfSSL_SSL_in_connect_init(WOLFSSL* ssl);
     WOLFSSL_API WOLFSSL_SESSION *wolfSSL_SSL_get0_session(const WOLFSSL *s);
 #endif
 
+#ifndef NO_BIO
 WOLFSSL_API int wolfSSL_i2a_ASN1_INTEGER(WOLFSSL_BIO *bp,
     const WOLFSSL_ASN1_INTEGER *a);
+WOLFSSL_API int wolfSSL_i2a_ASN1_STRING(WOLFSSL_BIO *bp,
+    const WOLFSSL_ASN1_STRING *a, int type);
+#endif
 
 #ifdef HAVE_SESSION_TICKET
 typedef int (*ticketCompatCb)(WOLFSSL *ssl, unsigned char *name, unsigned char *iv,

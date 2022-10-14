@@ -43,4 +43,8 @@
 #define TLS_MAX_VERSION                 TLS1_3_VERSION
 #endif
 
+#ifndef TLSEXT_MAXLEN_host_name
+#define TLSEXT_MAXLEN_host_name         255
+#endif
+
 #endif /* WOLFSSL_OPENSSL_TLS1_H_ */
