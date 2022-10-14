@@ -7593,7 +7593,7 @@ int wolfSSL_X509_CRL_get_signature_nid(const WOLFSSL_X509_CRL* crl)
 }
 
 /* Retrieve signature from CRL
- * return WOLFSSL_SUCCESS on success
+ * return WOLFSSL_SUCCESS on success and negative values on failure
  */
 int wolfSSL_X509_CRL_get_signature(WOLFSSL_X509_CRL* crl,
     unsigned char* buf, int* bufSz)
@@ -7611,7 +7611,7 @@ int wolfSSL_X509_CRL_get_signature(WOLFSSL_X509_CRL* crl,
 }
 
 /* Retrieve serial number from RevokedCert
- * return WOLFSSL_SUCCESS on success
+ * return WOLFSSL_SUCCESS on success and negative values on failure
  */
 int wolfSSL_X509_REVOKED_get_serial_number(RevokedCert* rev,
     byte* in, int* inOutSz)
@@ -7633,8 +7633,32 @@ int wolfSSL_X509_REVOKED_get_serial_number(RevokedCert* rev,
     return WOLFSSL_SUCCESS;
 }
 
+const WOLFSSL_ASN1_INTEGER* wolfSSL_X509_REVOKED_get0_serial_number(const
+                                                      WOLFSSL_X509_REVOKED *rev)
+{
+    WOLFSSL_ENTER("wolfSSL_X509_REVOKED_get0_serial_number");
+
+    if (rev != NULL) {
+        return rev->serialNumber;
+    }
+    else
+        return NULL;
+}
+
+#ifndef NO_WOLFSSL_STUB
+const WOLFSSL_ASN1_TIME* wolfSSL_X509_REVOKED_get0_revocation_date(const
+                                                      WOLFSSL_X509_REVOKED *rev)
+{
+    WOLFSSL_STUB("wolfSSL_X509_REVOKED_get0_revocation_date");
+
+    (void) rev;
+    return NULL;
+}
+#endif
+
+
 /* print serial number out
-* return WOLFSSL_SUCCESS on success
+*  return WOLFSSL_SUCCESS on success
 */
 static int X509RevokedPrintSerial(WOLFSSL_BIO* bio, RevokedCert* rev,
     int indent)
@@ -7876,10 +7900,10 @@ static int X509CRLPrintDates(WOLFSSL_BIO* bio, WOLFSSL_X509_CRL* crl,
         return WOLFSSL_FAILURE;
     }
 
-    if (crl->crlList->lastDate[0] != 0) {
-        if (GetTimeString(crl->crlList->lastDate, ASN_UTC_TIME,
+    if (crl->crlList->lastDate.data[0] != 0) {
+        if (GetTimeString(crl->crlList->lastDate.data, ASN_UTC_TIME,
             tmp, MAX_WIDTH) != WOLFSSL_SUCCESS) {
-            if (GetTimeString(crl->crlList->lastDate, ASN_GENERALIZED_TIME,
+            if (GetTimeString(crl->crlList->lastDate.data, ASN_GENERALIZED_TIME,
             tmp, MAX_WIDTH) != WOLFSSL_SUCCESS) {
                 WOLFSSL_MSG("Error getting last update date");
                 return WOLFSSL_FAILURE;
@@ -7907,10 +7931,10 @@ static int X509CRLPrintDates(WOLFSSL_BIO* bio, WOLFSSL_X509_CRL* crl,
         return WOLFSSL_FAILURE;
     }
 
-    if (crl->crlList->nextDate[0] != 0) {
-        if (GetTimeString(crl->crlList->nextDate, ASN_UTC_TIME,
+    if (crl->crlList->nextDate.data[0] != 0) {
+        if (GetTimeString(crl->crlList->nextDate.data, ASN_UTC_TIME,
             tmp, MAX_WIDTH) != WOLFSSL_SUCCESS) {
-            if (GetTimeString(crl->crlList->nextDate, ASN_GENERALIZED_TIME,
+            if (GetTimeString(crl->crlList->nextDate.data, ASN_GENERALIZED_TIME,
             tmp, MAX_WIDTH) != WOLFSSL_SUCCESS) {
                 WOLFSSL_MSG("Error getting next update date");
                 return WOLFSSL_FAILURE;
@@ -8013,23 +8037,25 @@ void wolfSSL_X509_CRL_free(WOLFSSL_X509_CRL *crl)
 #endif /* HAVE_CRL && (OPENSSL_EXTRA || WOLFSSL_WPAS_SMALL) */
 
 #ifdef OPENSSL_EXTRA
-#ifndef NO_WOLFSSL_STUB
 WOLFSSL_ASN1_TIME* wolfSSL_X509_CRL_get_lastUpdate(WOLFSSL_X509_CRL* crl)
 {
-    (void)crl;
-    WOLFSSL_STUB("X509_CRL_get_lastUpdate");
-    return 0;
+    if ((crl != NULL) && (crl->crlList != NULL) &&
+        (crl->crlList->lastDate.data[0] != 0)) {
+        return &crl->crlList->lastDate;
+    }
+    else
+        return NULL;
 }
-#endif
-#ifndef NO_WOLFSSL_STUB
+
 WOLFSSL_ASN1_TIME* wolfSSL_X509_CRL_get_nextUpdate(WOLFSSL_X509_CRL* crl)
 {
-    (void)crl;
-    WOLFSSL_STUB("X509_CRL_get_nextUpdate");
-    return 0;
+    if ((crl != NULL) && (crl->crlList != NULL) &&
+        (crl->crlList->nextDate.data[0] != 0)) {
+        return &crl->crlList->nextDate;
+    }
+    else
+        return NULL;
 }
-#endif
-
 
 #ifndef NO_WOLFSSL_STUB
 int wolfSSL_X509_CRL_verify(WOLFSSL_X509_CRL* crl, WOLFSSL_EVP_PKEY* key)
