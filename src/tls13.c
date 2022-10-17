@@ -12423,6 +12423,7 @@ int wolfSSL_read_early_data(WOLFSSL* ssl, void* data, int sz, int* outSz)
             ssl->earlyData = expecting_early_data;
         /* TODO: discuss if this is a good idea and will not break things */
         /* original: ret = wolfSSL_accept_TLSv13(ssl);*/
+        fprintf(stderr, "WOLFSSL: read_early_data(), options.tls1_3=%d\n", ssl->options.tls1_3);
         ret = wolfSSL_accept(ssl);
         if (ret <= 0)
             return WOLFSSL_FATAL_ERROR;
