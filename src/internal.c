@@ -6125,6 +6125,7 @@ int SetSSL_CTX(WOLFSSL* ssl, WOLFSSL_CTX* ctx, int writeDup)
     int ret;
     byte newSSL;
 
+    WOLFSSL_ENTER("SetSSL_CTX");
     if (!ssl || !ctx)
         return BAD_FUNC_ARG;
 

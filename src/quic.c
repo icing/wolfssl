@@ -587,7 +587,9 @@ int wolfSSL_quic_do_handshake(WOLFSSL* ssl)
          * This confuses the QUIC state handling.
          */
 #ifdef WOLFSSL_EARLY_DATA
-        if (ssl->quic.early_data_enabled) {
+        if (ssl->quic.early_data_enabled
+            || (ssl->options.side != WOLFSSL_CLIENT_END
+                && ssl->options.maxEarlyDataSz != 0)) {
             byte tmpbuffer[256];
             int len;
 
@@ -596,9 +598,13 @@ int wolfSSL_quic_do_handshake(WOLFSSL* ssl)
                     ret = wolfSSL_write_early_data(ssl, tmpbuffer, 0, &len);
                 }
             }
-            else if (/*disables code*/(1)) {
+            else {
+                WOLFSSL_MSG_EX("QUIC read_early_data(maxSz=%d)",
+                               ssl->options.maxEarlyDataSz);
                 ret = wolfSSL_read_early_data(ssl, tmpbuffer,
                                               sizeof(tmpbuffer), &len);
+                WOLFSSL_MSG_EX("QUIC read_early_data -> %d err=%d",
+                               ret, ssl->error);
                 if (ret < 0 && ssl->error == ZERO_RETURN) {
                     /* this is expected, since QUIC handles the actual early
                      * data separately. */

@@ -10806,6 +10806,9 @@ static int TLSX_EarlyData_Parse(WOLFSSL* ssl, const byte* input, word16 length,
         if (length != 0)
             return BUFFER_E;
 
+        WOLFSSL_MSG_EX("TLSX_EarlyData_Parse, expecting=%d, max=%d",
+                       ssl->earlyData == expecting_early_data,
+                       ssl->options.maxEarlyDataSz);
         if (ssl->earlyData == expecting_early_data) {
 
             if (ssl->options.maxEarlyDataSz != 0)

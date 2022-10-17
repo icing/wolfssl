@@ -12421,7 +12421,9 @@ int wolfSSL_read_early_data(WOLFSSL* ssl, void* data, int sz, int* outSz)
     if (ssl->options.handShakeState == NULL_STATE) {
         if (ssl->error != WC_PENDING_E)
             ssl->earlyData = expecting_early_data;
-        ret = wolfSSL_accept_TLSv13(ssl);
+        /* TODO: discuss if this is a good idea and will not break things */
+        /* original: ret = wolfSSL_accept_TLSv13(ssl);*/
+        ret = wolfSSL_accept(ssl);
         if (ret <= 0)
             return WOLFSSL_FATAL_ERROR;
     }
